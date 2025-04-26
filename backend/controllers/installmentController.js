@@ -25,7 +25,6 @@ async function recalculatePendingInstallments(loanId, paymentDateForZeroing = nu
         const numberOfPending = pendingInstallments.length;
 
         if (numberOfPending === 0) {
-            console.log(`Loan ${loanId}: Recalculation triggered, but no pending installments found.`);
             return { recalculated: false, message: "No pending installments to recalculate." };
         }
 
@@ -33,7 +32,6 @@ async function recalculatePendingInstallments(loanId, paymentDateForZeroing = nu
             // Calculate the equal amount for each remaining installment
             const newInstallmentAmount = parseFloat((newRemainingBalance / numberOfPending).toFixed(2));
             let totalApplied = 0;
-            console.log(`Loan ${loanId}: Recalculating ${numberOfPending} pending installments. New equal amount: ${newInstallmentAmount}`);
 
             // Update all but the last installment with the calculated equal amount
             for (let i = 0; i < numberOfPending - 1; i++) {
@@ -41,7 +39,6 @@ async function recalculatePendingInstallments(loanId, paymentDateForZeroing = nu
                 const amountToApply = Math.max(0, newInstallmentAmount); // Ensure non-negative
                 await Installment.updateAmountDue(inst.installment_id, amountToApply);
                 totalApplied += amountToApply;
-                console.log(`  - Updated installment ${inst.installment_id} to ${amountToApply.toFixed(2)}`);
             }
 
             // Adjust the last installment to cover the exact remaining balance difference due to rounding
@@ -49,12 +46,10 @@ async function recalculatePendingInstallments(loanId, paymentDateForZeroing = nu
             const lastInstallmentAmount = parseFloat((newRemainingBalance - totalApplied).toFixed(2));
             const finalLastAmount = Math.max(0, lastInstallmentAmount); // Ensure non-negative
             await Installment.updateAmountDue(lastInstallment.installment_id, finalLastAmount);
-            console.log(`  - Updated last installment ${lastInstallment.installment_id} to ${finalLastAmount.toFixed(2)} to match remaining balance.`);
 
             return { recalculated: true, message: `Recalculated ${numberOfPending} pending installments equally.` };
         } else {
             // Remaining balance is effectively zero. Mark all pending as paid with 0 amount.
-            console.log(`Loan ${loanId}: Remaining balance near zero after payment. Clearing ${numberOfPending} pending installments.`);
             for (const inst of pendingInstallments) {
                 await Installment.updateAmountDue(inst.installment_id, 0);
                 // Use the provided payment date when zeroing out due to payment
@@ -148,7 +143,7 @@ exports.markInstallmentPaid = async (req, res) => { // Or payInstallment
               await Loan.updateNextPaymentDate(loanId, null);
               nextDueDate = null;
           }
-          console.log(`Loan ${loanId} marked as fully_paid.`);
+          
           loanStatusUpdated = true;
           message += ' Loan is now fully paid.';
         }

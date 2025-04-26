@@ -1,39 +1,31 @@
-import { useState, useEffect, useMemo } from "react";
-
-// react-router components
-import { Route, Switch, Redirect, useLocation } from "react-router-dom";
-
-// @mui material components
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Route, Switch, Redirect, useLocation, useHistory } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Icon from "@mui/material/Icon";
-
-// Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
-
-// Vision UI Dashboard React example components
 import Sidenav from "examples/Sidenav";
 import Configurator from "examples/Configurator";
-
-// Vision UI Dashboard React themes
 import theme from "assets/theme";
 import themeRTL from "assets/theme/theme-rtl";
-
-// RTL plugins
 import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
-
-// Vision UI Dashboard React routes
 import routes from "routes";
-
-// Vision UI Dashboard React context
 import { useVisionUIController, setOpenConfigurator, setLayout } from "context";
+import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
+import Dashboard from 'layouts/dashboard'; // Example Dashboard component
+import SignIn from 'layouts/authentication/sign-in';
 
-// Additional layout/component imports
-// Remove these direct imports as they are likely handled by the routes file
-// import AdminManagement from "layouts/admin";
-// import ClientManagement from "layouts/clients";
+const handleLogout = (history) => {
+  localStorage.removeItem('authToken');
+  sessionStorage.removeItem('authToken');
+  if (history) {
+    history.push('/authentication/sign-in');
+  } else {
+    window.location.href = '/authentication/sign-in';
+  }
+};
 
 export default function App() {
   const [controller, dispatch] = useVisionUIController();
@@ -41,74 +33,81 @@ export default function App() {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useLocation();
+  const history = useHistory();
+  const inactivityTimer = useRef(null);
+  const inactivityTimeoutDuration = 60 * 60 * 1000; // 1 hour in milliseconds
 
-  // --- Authentication Check ---
-  // Check for token in both localStorage (Remember Me) and sessionStorage
+  const resetInactivityTimer = useCallback(() => {
+    clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = setTimeout(() => {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (token) {
+        console.log('User inactive, logging out.');
+        handleLogout(history);
+      }
+    }, inactivityTimeoutDuration);
+  }, [history, inactivityTimeoutDuration]);
+
+  useEffect(() => {
+    const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetInactivityTimer);
+    });
+    resetInactivityTimer();
+    return () => {
+      clearTimeout(inactivityTimer.current);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetInactivityTimer);
+      });
+    };
+  }, [resetInactivityTimer]);
+
   const isAuthenticated = useMemo(() => {
     const token = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-    // Optionally: Add token validation logic here if needed (e.g., check expiry)
     return !!token;
-  }, [pathname]); // Re-check on path change, e.g., after login/logout redirect
-  // --- End Authentication Check ---
+  }, [pathname]);
 
-
-  // Cache for the rtl
   useMemo(() => {
     const cacheRtl = createCache({
       key: "rtl",
       stylisPlugins: [rtlPlugin],
     });
-
     setRtlCache(cacheRtl);
   }, []);
 
-  // Open sidenav when mouse enter on mini sidenav
   const handleOnMouseEnter = () => {
     if (miniSidenav && !onMouseEnter) {
-      // setMiniSidenav(dispatch, false); // Temporarily disable auto-expand on hover if not desired
       setOnMouseEnter(true);
     }
   };
 
-  // Close sidenav when mouse leave mini sidenav
   const handleOnMouseLeave = () => {
     if (onMouseEnter) {
-      // setMiniSidenav(dispatch, true); // Temporarily disable auto-collapse on leave if not desired
       setOnMouseLeave(false);
     }
   };
 
-  // Change the openConfigurator state
   const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
 
-  // Setting the dir attribute for the body element
   useEffect(() => {
     document.body.setAttribute("dir", direction);
   }, [direction]);
 
-  // Setting page scroll to 0 when changing the route
   useEffect(() => {
     document.documentElement.scrollTop = 0;
     document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
-  // --- Route Rendering Logic ---
   const getRoutes = (allRoutes) =>
     allRoutes.map((route) => {
       if (route.collapse) {
         return getRoutes(route.collapse);
       }
-
       if (route.route) {
-        // Ensure the component exists before creating the route
-        // Use exact prop for Route in v5
         return route.component ? <Route exact path={route.route} component={route.component} key={route.key} /> : null;
       }
-
       return null;
     });
-  // --- End Route Rendering Logic ---
-
 
   const configsButton = (
     <VuiBox
@@ -134,31 +133,26 @@ export default function App() {
     </VuiBox>
   );
 
-  // Determine layout based on pathname
   useEffect(() => {
     setLayout(dispatch, pathname.includes("/authentication/") ? "page" : "dashboard");
   }, [pathname, dispatch]);
-
 
   return direction === "rtl" ? (
     <CacheProvider value={rtlCache}>
       <ThemeProvider theme={themeRTL}>
         <CssBaseline />
-        {/* RTL Content */}
-        {/* ... similar structure as LTR below, adapt if needed ... */}
       </ThemeProvider>
     </CacheProvider>
   ) : (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {/* Conditionally render Sidenav only for dashboard layout and if authenticated */}
       {layout === "dashboard" && isAuthenticated && (
         <>
           <Sidenav
             color={sidenavColor}
-            brand="" // Or your brand image
-            brandName="VISION" // Your brand name
-            routes={routes} // Pass routes to Sidenav
+            brand=""
+            brandName="VISION"
+            routes={routes}
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
           />
@@ -166,15 +160,13 @@ export default function App() {
           {configsButton}
         </>
       )}
-      {layout === "vr" && <Configurator />} {/* Keep VR Configurator if needed */}
-      {/* Replace Routes with Switch and Navigate with Redirect */}
+      {layout === "vr" && <Configurator />}
       <Switch>
-        {getRoutes(routes)} {/* Render routes from routes.js */}
-        {/* The routes for AdminManagement and ClientManagement should be defined in routes.js */}
-        {/* <Route path="/clients" component={ClientManagement} /> */}
-        {/* <Route path="/admin-users" component={AdminManagement} /> */}
-        <Redirect from="/billing" to="/billing/loans" /> {/* Redirect for default Billing page */}
-        <Redirect from="*" to="/dashboard" /> {/* Use Redirect for catch-all */}
+        <Route path="/authentication/sign-in" component={SignIn} />
+        <ProtectedRoute path="/dashboard" component={Dashboard} />
+        {getRoutes(routes)}
+        <Redirect from="/billing" to="/billing/loans" />
+        <Redirect from="*" to="/dashboard" />
       </Switch>
     </ThemeProvider>
   );

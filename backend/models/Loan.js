@@ -176,7 +176,6 @@ const Loan = {
       }
       const sql = `UPDATE loans SET remaining_balance = GREATEST(0, remaining_balance - ?) WHERE loan_id = ?`;
       const [result] = await pool.query(sql, [decreaseAmount, loanId]);
-      console.log(`Decreased remaining balance for loan ${loanId} by ${decreaseAmount}. Affected rows: ${result.affectedRows}`);
       return result.affectedRows;
   },
   // --- End New Method ---

@@ -134,12 +134,10 @@ exports.deleteLoan = async (req, res) => {
         // 2. Delete associated payment history records (if any installments exist)
         if (installmentIds.length > 0) {
             const deletedHistoryCount = await PaymentHistory.deleteByInstallmentIds(installmentIds);
-            console.log(`Deleted ${deletedHistoryCount} payment history records for loan ${id}`);
         }
 
         // 3. Delete associated installments
         const deletedInstallmentsCount = await Installment.deleteByLoanId(id);
-        console.log(`Deleted ${deletedInstallmentsCount} installments for loan ${id}`);
 
         // 4. Then delete the loan itself
         const affectedRows = await Loan.delete(id);

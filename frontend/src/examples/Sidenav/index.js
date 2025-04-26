@@ -69,21 +69,15 @@ function Sidenav({ color, brandName, routes, ...rest }) {
 
   // --- Logout Handler ---
   const handleLogout = () => {
-    console.log("--- handleLogout function entered ---"); // Add log at the very start
-    console.log("Logout action triggered in Sidenav."); // Add console log for verification
-
     // Clear authentication token from both storages
     localStorage.removeItem("authToken");
-    sessionStorage.removeItem("authToken");
-    console.log("Tokens cleared from localStorage and sessionStorage."); // Log token clearing
+    sessionStorage.removeItem("authToken"); // Log token clearing
 
     // Optionally: Dispatch action to update global auth state if using context/redux
     // Optionally: Make API call to backend logout endpoint if needed (though less critical for JWT)
     // axiosInstance.post('/api/admins/logout').catch(err => console.error("Backend logout call failed:", err));
 
-
     // Redirect to sign-in page using full page reload
-    console.log("Redirecting to /authentication/sign-in via full reload..."); // Log redirection
     window.location.href = '/authentication/sign-in'; // Force full page reload
   };
   // --- End Logout Handler ---

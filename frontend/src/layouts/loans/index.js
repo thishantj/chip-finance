@@ -433,7 +433,6 @@ function Loans() {
   // --- New Edit/Delete Handlers ---
   const handleEditLoan = (loanId) => {
     // Placeholder for edit functionality
-    console.log(`Edit loan ${loanId}`);
     alert(`Edit functionality for loan ${loanId} is not yet implemented.`);
     // Later: Open a modal, fetch loan details, populate form, handle update submission
   };

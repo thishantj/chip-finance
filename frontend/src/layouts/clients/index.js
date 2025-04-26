@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react"; // Import useState and useEffect
+import { useState, useEffect, useCallback } from "react"; // Import useState and useEffect
 import axios from "axios"; // Import axios for API calls
+import axiosInstance from "api/axiosInstance";
+import { getToken } from "utils/auth"; // Updated import path
 
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon"; // Import Icon
@@ -52,13 +54,8 @@ function ClientManagement() { // Renamed component
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Add loading state
 
-  // Function to get token (checks both storages)
-  const getToken = () => {
-      return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-  };
-
   // Fetch client list
-  const fetchClients = async () => { // Renamed function
+  const fetchClients = useCallback(async () => { // Renamed function
       setIsLoading(true); // Start loading
       try {
           setError('');
@@ -80,14 +77,14 @@ function ClientManagement() { // Renamed component
       } finally {
           setIsLoading(false); // Stop loading regardless of success or error
       }
-  };
+  }, [searchTerm]); // Add searchTerm dependency
 
   useEffect(() => {
     fetchClients(); // Fetch clients on component mount
-  }, []);
+  }, [fetchClients]);
 
   // Handle Delete Action
-  const handleDelete = async (clientId) => { // Renamed parameter
+  const handleDeleteClient = async (clientId) => { // Renamed parameter
     if (window.confirm(`Are you sure you want to delete client with ID: ${clientId}?`)) { // Updated confirmation message
       try {
         setError('');
@@ -170,6 +167,16 @@ function ClientManagement() { // Renamed component
       }
   };
 
+  // Handle Update Client Form Submission
+  const handleUpdateClient = async (event) => {
+    // ...existing code...
+      const token = getToken();
+      if (!token) {
+        setEditError("Authentication token not found.");
+        return;
+      }
+    // ...existing code...
+  };
 
   // Filter clients based on search term (name, NIC, or telephone)
   const filteredClients = clients.filter(client =>
@@ -227,7 +234,7 @@ function ClientManagement() { // Renamed component
             size="small"
             color="error"
             sx={{ margin: '0 5px' }}
-            onClick={() => handleDelete(client.client_id)} // Use client_id
+            onClick={() => handleDeleteClient(client.client_id)} // Use client_id
         >
           <Icon>delete</Icon>
         </IconButton>

@@ -20,8 +20,13 @@ import avatar3 from "assets/images/avatar3.png";
 import avatar4 from "assets/images/avatar4.png";
 
 export default function data() {
-  const avatars = (members) =>
-    members.map(([image, name]) => (
+  const avatars = (members) => {
+    // Add safety check for array type
+    if (!Array.isArray(members)) {
+      console.error("Invalid 'members' data provided to avatars function:", members);
+      return null; // Return null or an empty fragment if data is not an array
+    }
+    return members.map(([image, name]) => (
       <Tooltip key={name} title={name} placeholder="bottom">
         <VuiAvatar
           src={image}
@@ -44,6 +49,7 @@ export default function data() {
         />
       </Tooltip>
     ));
+  }
 
   return {
     columns: [

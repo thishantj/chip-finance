@@ -1,12 +1,15 @@
+import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
+import axiosInstance from "api/axiosInstance"; // Assuming axiosInstance is correctly imported
+import { getToken } from "utils/auth"; // Updated import path
+
 // @mui material components
 import Grid from "@mui/material/Grid";
-import Icon from "@mui/material/Icon";
-import { Card, LinearProgress, Stack } from "@mui/material";
+import { Card, CircularProgress } from "@mui/material"; // Add CircularProgress
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
 import VuiTypography from "components/VuiTypography";
-import VuiProgress from "components/VuiProgress";
+import VuiAlert from "components/VuiAlert"; // Import VuiAlert if not already present
 
 // Vision UI Dashboard React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -15,7 +18,6 @@ import MiniStatisticsCard from "examples/Cards/StatisticsCards/MiniStatisticsCar
 import linearGradient from "assets/theme/functions/linearGradient";
 
 // Vision UI Dashboard React base styles
-import typography from "assets/theme/base/typography";
 import colors from "assets/theme/base/colors";
 
 // Dashboard layout components
@@ -26,233 +28,217 @@ import SatisfactionRate from "layouts/dashboard/components/SatisfactionRate";
 import ReferralTracking from "layouts/dashboard/components/ReferralTracking";
 
 // React icons
-import { IoIosRocket } from "react-icons/io";
-import { IoGlobe } from "react-icons/io5";
-import { IoBuild } from "react-icons/io5";
 import { IoWallet } from "react-icons/io5";
 import { IoDocumentText } from "react-icons/io5";
-import { FaShoppingCart } from "react-icons/fa";
+import { FaUserPlus } from "react-icons/fa"; // Import user icon
 
 // Data
 import LineChart from "examples/Charts/LineCharts/LineChart";
 import BarChart from "examples/Charts/BarCharts/BarChart";
-import { lineChartDataDashboard, lineChartOptionsDashboard } from "variables/charts";
-import { barChartDataDashboard, barChartOptionsDashboard } from "variables/charts";
+// Assuming charts data is fetched or static, keep imports if needed
+// import { lineChartDataDashboard, lineChartOptionsDashboard } from "variables/charts";
+// import { barChartDataDashboard, barChartOptionsDashboard } from "variables/charts";
+
+// Function to format currency (ensure this is defined or imported)
+const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined || isNaN(amount)) return "N/A";
+    // Adjust formatting as needed
+    return parseFloat(amount).toLocaleString("en-LK", {
+        style: "currency",
+        currency: "LKR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+};
+
 
 function Dashboard() {
   const { gradients } = colors;
   const { cardContent } = gradients;
   const defaultChartData = { labels: [], datasets: [] }; // Default empty structure
 
+  // State for summary data
+  const [weeklyPayments, setWeeklyPayments] = useState(null);
+  const [weeklyPaymentsPercentage, setWeeklyPaymentsPercentage] = useState(null); // New state
+  const [monthlyPayments, setMonthlyPayments] = useState(null);
+  const [monthlyPaymentsPercentage, setMonthlyPaymentsPercentage] = useState(null); // New state
+  const [monthlyLoansCount, setMonthlyLoansCount] = useState(null);
+  const [monthlyLoansPercentage, setMonthlyLoansPercentage] = useState(null); // New state
+  const [monthlyNewClientsCount, setMonthlyNewClientsCount] = useState(null); // New state for count
+  const [monthlyNewClientsPercentage, setMonthlyNewClientsPercentage] = useState(null); // New state for percentage
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // Keep this one for errors
+  const [adminName, setAdminName] = useState('');
+
+  // Fetch Admin Info
+  const fetchAdminInfo = useCallback(async () => { // Wrap in useCallback
+    // setError(''); // Clear previous errors - Let summary fetch handle its errors
+    try {
+      const token = getToken(); // Use the imported helper
+      if (!token) {
+        // setError("Authentication token not found. Please log in again."); // Avoid overwriting summary errors
+        console.error("Authentication token not found for admin info fetch.");
+        return;
+      }
+      const response = await axiosInstance.get('/api/admins/check-auth', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Assuming response.data contains { admin_name: '...' }
+      if (response.data && response.data.admin_name) { // Check if data and admin_name exist
+        setAdminName(response.data.admin_name);
+      } else {
+         // Handle case where admin_name might be missing
+         console.warn("Admin name not found in auth check response.");
+         setAdminName(''); // Set to empty string or default
+      }
+    } catch (err) {
+      console.error("Error fetching admin info:", err);
+      // setError(err.response?.data?.message || "Failed to load admin information."); // Avoid overwriting summary errors
+    }
+  }, []); // Add empty dependency array for useCallback
+
+  // Fetch Dashboard Summaries and Admin Info
+  useEffect(() => {
+    fetchAdminInfo(); // Call fetchAdminInfo
+
+    const fetchSummaries = async () => {
+      setLoading(true); // Set loading true at the start of fetch
+      setError(null); // Clear previous errors
+      const token = getToken();
+      if (!token) {
+        setError("Authentication required.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+        // Add the new client summary endpoint to Promise.all
+        const [weeklyRes, monthlyRes, loansRes, clientsRes] = await Promise.all([
+          axiosInstance.get("/api/dashboard/summary/weekly-payments", { headers }),
+          axiosInstance.get("/api/dashboard/summary/monthly-payments", { headers }),
+          axiosInstance.get("/api/dashboard/summary/monthly-loans-count", { headers }),
+          axiosInstance.get("/api/dashboard/summary/monthly-new-clients", { headers }), // Fetch new client data
+        ]);
+
+        // Use optional chaining and nullish coalescing for safety
+        setWeeklyPayments(weeklyRes?.data?.totalAmount ?? null);
+        setWeeklyPaymentsPercentage(weeklyRes?.data?.percentageChange ?? null); // Set weekly percentage
+        setMonthlyPayments(monthlyRes?.data?.totalAmount ?? null);
+        setMonthlyPaymentsPercentage(monthlyRes?.data?.percentageChange ?? null); // Set monthly percentage
+        setMonthlyLoansCount(loansRes?.data?.count ?? null);
+        setMonthlyLoansPercentage(loansRes?.data?.percentageChange ?? null); // Set loans percentage
+        setMonthlyNewClientsCount(clientsRes?.data?.count ?? null); // Set new client count
+        setMonthlyNewClientsPercentage(clientsRes?.data?.percentageChange ?? null); // Set new client percentage
+
+      } catch (err) {
+        console.error("Error fetching dashboard summaries:", err);
+        setError(err.response?.data?.message || "Failed to load dashboard data.");
+        // Reset data states on error
+        setWeeklyPayments(null);
+        setWeeklyPaymentsPercentage(null); // Reset on error
+        setMonthlyPayments(null);
+        setMonthlyPaymentsPercentage(null); // Reset on error
+        setMonthlyLoansCount(null);
+        setMonthlyLoansPercentage(null); // Reset on error
+        setMonthlyNewClientsCount(null); // Reset new client count on error
+        setMonthlyNewClientsPercentage(null); // Reset new client percentage on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSummaries();
+  }, [fetchAdminInfo]); // Add fetchAdminInfo to dependency array
+
+  const renderStatisticCard = (title, count, icon, formatFn, percentage) => { // Add percentage parameter
+      if (loading) {
+          return <CircularProgress size={20} color="inherit" />;
+      }
+      // Use the 'error' state variable from the component scope, don't redeclare
+      if (error && count === null) { // Only show card-specific error if its data failed (is null)
+          return <VuiTypography variant="caption" color="error">Error</VuiTypography>;
+      }
+
+      // Determine percentage color and text
+      let percentageColor = "secondary"; // Default or grey
+      let percentageText = "";
+      if (percentage !== null && !isNaN(percentage)) {
+          percentageColor = percentage >= 0 ? "success" : "error";
+          percentageText = `${percentage >= 0 ? '+' : ''}${percentage}%`;
+      }
+
+
+      return (
+          <MiniStatisticsCard
+              title={{ text: title, fontWeight: "regular" }}
+              count={formatFn ? formatFn(count) : (count ?? 'N/A')}
+              percentage={{ color: percentageColor, text: percentageText }} // Use dynamic percentage
+              icon={{ color: "info", component: icon }} // Icon passed as prop
+          />
+      );
+  };
+
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
+      {/* Display the main error state if needed */}
+      {error && !loading && ( // Display error only if not loading and error exists
+        <VuiBox mb={2}>
+          {/* Use VuiAlert for better presentation */}
+          <VuiAlert color="error" dismissible onClose={() => setError(null)}>
+             <VuiTypography color="white" variant="body2">{error}</VuiTypography>
+          </VuiAlert>
+        </VuiBox>
+      )}
       <VuiBox py={3}>
+        {/* Welcome message or other components can use adminName */}
+        {adminName && (
+           <VuiTypography variant="h5" color="white" mb={3}>Welcome back, {adminName}!</VuiTypography>
+        )}
+        {/* Removed redundant error display here as it's handled above */}
         <VuiBox mb={3}>
           <Grid container spacing={3}>
+            {/* 1. This Week's Payments */}
             <Grid item xs={12} md={6} xl={3}>
-              <MiniStatisticsCard
-                title={{ text: "today's money", fontWeight: "regular" }}
-                count="$53,000"
-                percentage={{ color: "success", text: "+55%" }}
-                icon={{ color: "info", component: <IoWallet size="22px" color="white" /> }}
-              />
+              {renderStatisticCard(
+                "This week's payments",
+                weeklyPayments,
+                <IoWallet size="22px" color="white" />,
+                formatCurrency,
+                weeklyPaymentsPercentage // Pass percentage
+              )}
             </Grid>
+            {/* 2. This Month's Payments */}
             <Grid item xs={12} md={6} xl={3}>
-              <MiniStatisticsCard
-                title={{ text: "today's users" }}
-                count="2,300"
-                percentage={{ color: "success", text: "+3%" }}
-                icon={{ color: "info", component: <IoGlobe size="22px" color="white" /> }}
-              />
+              {renderStatisticCard(
+                "This month's payments",
+                monthlyPayments,
+                <IoWallet size="22px" color="white" />, // Using wallet icon again
+                formatCurrency,
+                monthlyPaymentsPercentage // Pass percentage
+              )}
             </Grid>
+            {/* 3. This Month's Loans Issued */}
             <Grid item xs={12} md={6} xl={3}>
-              <MiniStatisticsCard
-                title={{ text: "new clients" }}
-                count="+3,462"
-                percentage={{ color: "error", text: "-2%" }}
-                icon={{ color: "info", component: <IoDocumentText size="22px" color="white" /> }}
-              />
+              {renderStatisticCard(
+                "This month's loans issued",
+                monthlyLoansCount,
+                <IoDocumentText size="22px" color="white" />, // Using document icon
+                null, // No format function needed for count
+                monthlyLoansPercentage // Pass percentage
+              )}
             </Grid>
+            {/* 4. New Customers This Month */}
             <Grid item xs={12} md={6} xl={3}>
-              <MiniStatisticsCard
-                title={{ text: "total sales" }}
-                count="$103,430"
-                percentage={{ color: "success", text: "+5%" }}
-                icon={{ color: "info", component: <FaShoppingCart size="20px" color="white" /> }}
-              />
-            </Grid>
-          </Grid>
-        </VuiBox>
-        <VuiBox mb={3}>
-          <Grid container spacing="18px">
-            <Grid item xs={12} lg={12} xl={5}>
-              <WelcomeMark />
-            </Grid>
-            <Grid item xs={12} lg={6} xl={3}>
-              <SatisfactionRate />
-            </Grid>
-            <Grid item xs={12} lg={6} xl={4}>
-              <ReferralTracking />
-            </Grid>
-          </Grid>
-        </VuiBox>
-        <VuiBox mb={3}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} lg={6} xl={7}>
-              <Card>
-                <VuiBox sx={{ height: "100%" }}>
-                  <VuiTypography variant="lg" color="white" fontWeight="bold" mb="5px">
-                    Sales Overview
-                  </VuiTypography>
-                  <VuiBox display="flex" alignItems="center" mb="40px">
-                    <VuiTypography variant="button" color="success" fontWeight="bold">
-                      +5% more{" "}
-                      <VuiTypography variant="button" color="text" fontWeight="regular">
-                        in 2021
-                      </VuiTypography>
-                    </VuiTypography>
-                  </VuiBox>
-                  <VuiBox sx={{ height: "310px" }}>
-                    <LineChart
-                      lineChartData={lineChartDataDashboard || defaultChartData} // Provide default data
-                      lineChartOptions={lineChartOptionsDashboard}
-                    />
-                  </VuiBox>
-                </VuiBox>
-              </Card>
-            </Grid>
-            <Grid item xs={12} lg={6} xl={5}>
-              <Card>
-                <VuiBox>
-                  <VuiBox
-                    mb="24px"
-                    height="220px"
-                    sx={{
-                      background: linearGradient(
-                        cardContent.main,
-                        cardContent.state,
-                        cardContent.deg
-                      ),
-                      borderRadius: "20px",
-                    }}
-                  >
-                    <BarChart
-                      barChartData={barChartDataDashboard || defaultChartData} // Provide default data
-                      barChartOptions={barChartOptionsDashboard}
-                    />
-                  </VuiBox>
-                  <VuiTypography variant="lg" color="white" fontWeight="bold" mb="5px">
-                    Active Users
-                  </VuiTypography>
-                  <VuiBox display="flex" alignItems="center" mb="40px">
-                    <VuiTypography variant="button" color="success" fontWeight="bold">
-                      (+23){" "}
-                      <VuiTypography variant="button" color="text" fontWeight="regular">
-                        than last week
-                      </VuiTypography>
-                    </VuiTypography>
-                  </VuiBox>
-                  <Grid container spacing="50px">
-                    <Grid item xs={6} md={3} lg={3}>
-                      <Stack
-                        direction="row"
-                        spacing={{ sm: "10px", xl: "4px", xxl: "10px" }}
-                        mb="6px"
-                      >
-                        <VuiBox
-                          bgColor="info"
-                          display="flex"
-                          justifyContent="center"
-                          alignItems="center"
-                          sx={{ borderRadius: "6px", width: "25px", height: "25px" }}
-                        >
-                          <IoWallet color="#fff" size="12px" />
-                        </VuiBox>
-                        <VuiTypography color="text" variant="button" fontWeight="medium">
-                          Users
-                        </VuiTypography>
-                      </Stack>
-                      <VuiTypography color="white" variant="lg" fontWeight="bold" mb="8px">
-                        32,984
-                      </VuiTypography>
-                      <VuiProgress value={60} color="info" sx={{ background: "#2D2E5F" }} />
-                    </Grid>
-                    <Grid item xs={6} md={3} lg={3}>
-                      <Stack
-                        direction="row"
-                        spacing={{ sm: "10px", xl: "4px", xxl: "10px" }}
-                        mb="6px"
-                      >
-                        <VuiBox
-                          bgColor="info"
-                          display="flex"
-                          justifyContent="center"
-                          alignItems="center"
-                          sx={{ borderRadius: "6px", width: "25px", height: "25px" }}
-                        >
-                          <IoIosRocket color="#fff" size="12px" />
-                        </VuiBox>
-                        <VuiTypography color="text" variant="button" fontWeight="medium">
-                          Clicks
-                        </VuiTypography>
-                      </Stack>
-                      <VuiTypography color="white" variant="lg" fontWeight="bold" mb="8px">
-                        2,42M
-                      </VuiTypography>
-                      <VuiProgress value={60} color="info" sx={{ background: "#2D2E5F" }} />
-                    </Grid>
-                    <Grid item xs={6} md={3} lg={3}>
-                      <Stack
-                        direction="row"
-                        spacing={{ sm: "10px", xl: "4px", xxl: "10px" }}
-                        mb="6px"
-                      >
-                        <VuiBox
-                          bgColor="info"
-                          display="flex"
-                          justifyContent="center"
-                          alignItems="center"
-                          sx={{ borderRadius: "6px", width: "25px", height: "25px" }}
-                        >
-                          <FaShoppingCart color="#fff" size="12px" />
-                        </VuiBox>
-                        <VuiTypography color="text" variant="button" fontWeight="medium">
-                          Sales
-                        </VuiTypography>
-                      </Stack>
-                      <VuiTypography color="white" variant="lg" fontWeight="bold" mb="8px">
-                        2,400$
-                      </VuiTypography>
-                      <VuiProgress value={60} color="info" sx={{ background: "#2D2E5F" }} />
-                    </Grid>
-                    <Grid item xs={6} md={3} lg={3}>
-                      <Stack
-                        direction="row"
-                        spacing={{ sm: "10px", xl: "4px", xxl: "10px" }}
-                        mb="6px"
-                      >
-                        <VuiBox
-                          bgColor="info"
-                          display="flex"
-                          justifyContent="center"
-                          alignItems="center"
-                          sx={{ borderRadius: "6px", width: "25px", height: "25px" }}
-                        >
-                          <IoBuild color="#fff" size="12px" />
-                        </VuiBox>
-                        <VuiTypography color="text" variant="button" fontWeight="medium">
-                          Items
-                        </VuiTypography>
-                      </Stack>
-                      <VuiTypography color="white" variant="lg" fontWeight="bold" mb="8px">
-                        320
-                      </VuiTypography>
-                      <VuiProgress value={60} color="info" sx={{ background: "#2D2E5F" }} />
-                    </Grid>
-                  </Grid>
-                </VuiBox>
-              </Card>
+              {renderStatisticCard(
+                "New customers this month", // Updated title
+                monthlyNewClientsCount, // Use new client count state
+                <FaUserPlus size="20px" color="white" />, // Use user icon
+                null, // No format function needed for count
+                monthlyNewClientsPercentage // Pass the percentage state
+              )}
             </Grid>
           </Grid>
         </VuiBox>
@@ -270,3 +256,7 @@ function Dashboard() {
 }
 
 export default Dashboard;
+
+// Define or import lineChartOptionsDashboard and barChartOptionsDashboard if they are used
+const lineChartOptionsDashboard = { /* ... options ... */ };
+const barChartOptionsDashboard = { /* ... options ... */ };

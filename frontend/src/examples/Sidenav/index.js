@@ -38,7 +38,8 @@ function Sidenav({ color, brandName, routes, ...rest }) {
   const location = useLocation();
   const { pathname } = location;
   // Use a state object to manage the open state of multiple collapses
-  const [openCollapse, setOpenCollapse] = useState({});
+  // Initialize with 'billing' set to true to make it open by default
+  const [openCollapse, setOpenCollapse] = useState({ billing: true });
 
   // Function to toggle collapse state
   const handleCollapseToggle = (key) => {

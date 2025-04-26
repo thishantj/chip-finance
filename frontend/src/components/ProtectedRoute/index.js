@@ -1,10 +1,6 @@
 import React from 'react';
 import { Route, Redirect } from 'react-router-dom';
-
-// Helper function to get token
-const getToken = () => {
-  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-};
+import { getToken } from 'utils/auth'; // Updated import path
 
 const ProtectedRoute = ({ component: Component, ...rest }) => {
   const isAuthenticated = !!getToken(); // Check if token exists

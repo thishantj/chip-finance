@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useTheme } from "@mui/material/styles"; // Import useTheme
+import { getToken } from "utils/auth"; // Updated import path
 
 // @mui material components
 import Card from "@mui/material/Card";
@@ -100,10 +101,6 @@ function Loans() {
   const { size } = typography; // Destructure from typography
 
   // --- Helper Functions ---
-  const getToken = () => {
-    return localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-  };
-
   const handleCloseSnackbar = (event, reason) => {
       if (reason === 'clickaway') {
           return;

@@ -1,12 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
-require('dotenv').config(); // Make sure dotenv is configured
+const pool = require('./config/db'); // Ensure db config is correct
+require('dotenv').config();
 
+// Import Routes
 const adminRoutes = require('./routes/adminRoutes');
-const clientRoutes = require('./routes/clientRoutes'); // Import client routes
+const clientRoutes = require('./routes/clientRoutes');
 const loanRoutes = require('./routes/loanRoutes');
 const installmentRoutes = require('./routes/installmentRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes'); // Import dashboard routes
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -37,6 +40,7 @@ app.use('/api/admins', adminRoutes);
 app.use('/api/clients', clientRoutes); // Use client routes with base path /api/clients
 app.use('/api/loans', loanRoutes);
 app.use('/api/installments', installmentRoutes);
+app.use('/api/dashboard', dashboardRoutes); // Register dashboard routes
 
 // Basic route for testing
 app.get('/', (req, res) => {

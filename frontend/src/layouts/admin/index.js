@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"; // Import useState and useEffect
 import axiosInstance from "api/axiosInstance"; // Import the instance
+import { getToken } from "utils/auth"; // Updated import path
 
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon"; // Import Icon
@@ -54,10 +55,10 @@ function AdminManagement() { // Renamed component for clarity
   const [newPassword, setNewPassword] = useState(''); // State for add form: password
   const [openSnackbar, setOpenSnackbar] = useState(false); // State for Snackbar visibility
 
-  // Function to get token (checks both storages)
-  const getToken = () => {
-      return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-  };
+  // Remove the local getToken definition
+  // const getToken = () => {
+  //     return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+  // };
 
 
   // Fetch current admin ID

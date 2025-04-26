@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { getToken } from "utils/auth"; // Updated import path
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
@@ -74,7 +75,8 @@ function Installments() {
   const { size } = theme.typography;
 
   // --- Helper Functions ---
-  const getToken = () => localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
+  // Remove the local getToken definition
+  // const getToken = () => localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') {

@@ -74,14 +74,15 @@ const Loan = {
     }
   },
 
-  // Modified findAll method to include remaining_balance
+  // Modified findAll method to include remaining_balance AND telephone
   async findAll() {
-    // Ensure client details are joined correctly and select remaining_balance
+    // Ensure client details are joined correctly and select remaining_balance and telephone
     const sql = `
       SELECT
         l.*,
         c.name as client_name,
-        c.nic as client_nic
+        c.nic as client_nic,
+        c.telephone as client_telephone -- Added telephone
       FROM loans l
       JOIN clients c ON l.client_id = c.client_id
       ORDER BY l.created_at DESC`;

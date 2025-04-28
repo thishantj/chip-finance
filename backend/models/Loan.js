@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 // Correct the import path and ensure the utility exists
 const { calculateInstallments } = require('../utils/loanCalculator');
+const Installment = require('./Installment'); // Import Installment model for deletion cascade
 
 const Loan = {
   async create(loanData) {
@@ -104,14 +105,14 @@ const Loan = {
     return rows[0];
   },
 
-  async findByClientId(clientId) {
+  async findByClientId(clientId, connection = pool) { // Accept optional connection
     const sql = `
       SELECT l.*, c.name as client_name
       FROM loans l
       JOIN clients c ON l.client_id = c.client_id
       WHERE l.client_id = ?
       ORDER BY l.created_at DESC`;
-    const [rows] = await pool.query(sql, [clientId]);
+    const [rows] = await connection.query(sql, [clientId]); // Use connection
     return rows;
   },
 
@@ -124,6 +125,19 @@ const Loan = {
                  ORDER BY l.created_at DESC`;
     const [rows] = await pool.query(sql, [clientId]);
     return rows;
+  },
+  // --- End New Method ---
+
+  // --- New Method: Find loans with details for client loan summary ---
+  async findByClientIdWithDetails(clientId) {
+      const sql = `
+          SELECT l.*, c.name as client_name, c.nic as client_nic
+          FROM loans l
+          JOIN clients c ON l.client_id = c.client_id
+          WHERE l.client_id = ?
+          ORDER BY l.created_at DESC`;
+      const [rows] = await pool.query(sql, [clientId]);
+      return rows;
   },
   // --- End New Method ---
 
@@ -181,9 +195,28 @@ const Loan = {
   },
   // --- End New Method ---
 
-  async delete(id) {
+  // --- New Method: Get Total Remaining Balance for a Client ---
+  async getTotalRemainingBalanceByClient(clientId) {
+      const sql = `SELECT SUM(remaining_balance) as totalRemaining FROM loans WHERE client_id = ?`;
+      const [rows] = await pool.query(sql, [clientId]);
+      return rows[0]?.totalRemaining || 0;
+  },
+  // --- End New Method ---
+
+  // --- New Method: Get Total Due for Active Loans for a Client ---
+  async getTotalDueForActiveLoansByClient(clientId) {
+      const sql = `SELECT SUM(total_amount_due) as totalDueActive FROM loans WHERE client_id = ? AND status = 'active'`;
+      const [rows] = await pool.query(sql, [clientId]);
+      return rows[0]?.totalDueActive || 0;
+  },
+  // --- End New Method ---
+
+  async delete(id, connection = pool) { // Accept optional connection
+    // Before deleting the loan, delete associated installments
+    await Installment.deleteByLoanId(id, connection); // Pass connection
+
     const sql = 'DELETE FROM loans WHERE loan_id = ?';
-    const [result] = await pool.query(sql, [id]);
+    const [result] = await connection.query(sql, [id]); // Use connection
     return result.affectedRows;
   }
 };

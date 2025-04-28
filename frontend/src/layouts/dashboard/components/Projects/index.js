@@ -149,7 +149,6 @@ function Projects() {
     { name: "loan_count", label: "Loans", align: "center" }, // Added
     { name: "remaining", label: "Total Remaining", align: "right" }, // Renamed for clarity
     { name: "completion", label: "Completion", align: "center" }, // Added
-    { name: "action", label: "Action", align: "center" },
   ];
 
   // Map filtered data to table rows - Use processed client data
@@ -188,17 +187,6 @@ function Projects() {
           </VuiTypography>
           <VuiProgress value={client.completion_percentage} color="info" label={false} sx={{ background: "#2D2E5F" }} />
         </VuiBox>
-      ),
-      action: ( // Changed to VuiButton
-        <VuiButton
-            variant="contained"
-            color="info"
-            size="small"
-            onClick={() => alert(`Generate summary report for ${client.name} (Client ID: ${client.client_id})`)}
-            sx={{ py: 0.5, px: 1, fontSize: '0.75rem' }} // Adjust padding/fontSize if needed
-        >
-            Generate client summary
-        </VuiButton>
       ),
     };
   });

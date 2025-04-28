@@ -4,7 +4,7 @@ import { getToken } from "utils/auth"; // Updated import path
 
 // @mui material components
 import Grid from "@mui/material/Grid";
-import { Card, CircularProgress } from "@mui/material"; // Add CircularProgress
+import { Card, CircularProgress, Stack } from "@mui/material"; // Add CircularProgress and Stack
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
@@ -21,23 +21,15 @@ import linearGradient from "assets/theme/functions/linearGradient";
 import colors from "assets/theme/base/colors";
 
 // Dashboard layout components
-import WelcomeMark from "layouts/dashboard/components/WelcomeMark";
 import Projects from "layouts/dashboard/components/Projects";
 import OrderOverview from "layouts/dashboard/components/OrderOverview";
-import SatisfactionRate from "layouts/dashboard/components/SatisfactionRate";
-import ReferralTracking from "layouts/dashboard/components/ReferralTracking";
+import ClientSummaryReportCard from "layouts/dashboard/components/ClientSummaryReportCard";
+import NetProfitReportCard from "layouts/dashboard/components/NetProfitReportCard";
 
 // React icons
 import { IoWallet } from "react-icons/io5";
 import { IoDocumentText } from "react-icons/io5";
 import { FaUserPlus } from "react-icons/fa"; // Import user icon
-
-// Data
-import LineChart from "examples/Charts/LineCharts/LineChart";
-import BarChart from "examples/Charts/BarCharts/BarChart";
-// Assuming charts data is fetched or static, keep imports if needed
-// import { lineChartDataDashboard, lineChartOptionsDashboard } from "variables/charts";
-// import { barChartDataDashboard, barChartOptionsDashboard } from "variables/charts";
 
 // Function to format currency (ensure this is defined or imported)
 const formatCurrency = (amount) => {
@@ -247,7 +239,11 @@ function Dashboard() {
             <Projects />
           </Grid>
           <Grid item xs={12} md={6} lg={4}>
-            <OrderOverview />
+            <Stack spacing={3}>
+              <ClientSummaryReportCard />
+              <NetProfitReportCard />
+              <OrderOverview />
+            </Stack>
           </Grid>
         </Grid>
       </VuiBox>

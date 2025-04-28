@@ -25,7 +25,20 @@ const PaymentHistory = {
     const sql = `DELETE FROM payment_history WHERE installment_id IN (${placeholders})`;
     const [result] = await pool.query(sql, installmentIds);
     return result.affectedRows;
+  },
+
+  // --- New Method: Get Total Paid by Client in Date Range ---
+  async getTotalPaidByClientInRange(clientId, startDate, endDate) {
+    const sql = `
+      SELECT SUM(ph.amount_paid) as totalPaid
+      FROM payment_history ph
+      JOIN installments i ON ph.installment_id = i.installment_id
+      JOIN loans l ON i.loan_id = l.loan_id
+      WHERE l.client_id = ? AND ph.payment_date BETWEEN ? AND ?`;
+    const [rows] = await pool.query(sql, [clientId, startDate, endDate]);
+    return rows[0]?.totalPaid || 0;
   }
+  // --- End New Method ---
 
   // Add other necessary methods like findByLoanId, findByClientId etc. if needed later
 };

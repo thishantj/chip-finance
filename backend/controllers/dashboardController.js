@@ -1,51 +1,63 @@
 const pool = require('../config/db');
+// Import core functions from date-fns
+const { startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, subMonths } = require('date-fns');
+// Import only the timezone-specific function needed from date-fns-tz
+const { toZonedTime } = require('date-fns-tz');
 
-// Helper to get the start and end of the current week (Monday to Sunday)
+const timeZone = 'Asia/Colombo'; // Define the target timezone
+
+// Helper to get the start and end of the current week (Monday to Sunday) in Colombo Timezone
 const getCurrentWeekBounds = () => {
-    const now = new Date();
-    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay; // Adjust Sunday to be end of week
-    const firstDayOfWeek = new Date(now.setDate(now.getDate() + diffToMonday));
-    const lastDayOfWeek = new Date(firstDayOfWeek);
-    lastDayOfWeek.setDate(lastDayOfWeek.getDate() + 6); // Sunday
+    const now = new Date(); // Current time in UTC
+    // Use toZonedTime from date-fns-tz
+    const nowInColombo = toZonedTime(now, timeZone);
 
-    firstDayOfWeek.setHours(0, 0, 0, 0);
-    lastDayOfWeek.setHours(23, 59, 59, 999);
-    return { start: firstDayOfWeek, end: lastDayOfWeek };
+    // Use core functions from date-fns, passing the timeZone option
+    const start = startOfWeek(nowInColombo, { timeZone, weekStartsOn: 1 });
+    const end = endOfWeek(nowInColombo, { timeZone, weekStartsOn: 1 });
+
+    // Return standard Date objects. The database driver should handle conversion
+    // based on the connection's timezone settings or assume UTC.
+    // These Date objects represent the UTC instants corresponding to the Colombo timezone boundaries.
+    return { start, end };
 };
 
-// Helper to get the start and end of the previous week (Monday to Sunday)
+// Helper to get the start and end of the previous week (Monday to Sunday) in Colombo Timezone
 const getPreviousWeekBounds = () => {
-    const { start: currentWeekStart } = getCurrentWeekBounds();
-    const previousWeekEnd = new Date(currentWeekStart);
-    previousWeekEnd.setDate(previousWeekEnd.getDate() - 1); // End is Sunday of previous week
-    const previousWeekStart = new Date(previousWeekEnd);
-    previousWeekStart.setDate(previousWeekStart.getDate() - 6); // Start is Monday of previous week
+    const now = new Date();
+    // Use toZonedTime from date-fns-tz
+    const nowInColombo = toZonedTime(now, timeZone);
+    // Use core functions from date-fns
+    const startOfCurrentWeek = startOfWeek(nowInColombo, { timeZone, weekStartsOn: 1 });
+    const startOfPreviousWeek = subWeeks(startOfCurrentWeek, 1);
+    const endOfPreviousWeek = endOfWeek(startOfPreviousWeek, { timeZone, weekStartsOn: 1 });
 
-    previousWeekStart.setHours(0, 0, 0, 0);
-    previousWeekEnd.setHours(23, 59, 59, 999);
-    return { start: previousWeekStart, end: previousWeekEnd };
+    return { start: startOfPreviousWeek, end: endOfPreviousWeek };
 };
 
-// Helper to get the start and end of the current month
+// Helper to get the start and end of the current month using Colombo Timezone
 const getCurrentMonthBounds = () => {
     const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    firstDayOfMonth.setHours(0, 0, 0, 0);
-    lastDayOfMonth.setHours(23, 59, 59, 999);
-    return { start: firstDayOfMonth, end: lastDayOfMonth };
+    // Use toZonedTime from date-fns-tz
+    const nowInColombo = toZonedTime(now, timeZone);
+    // Use core functions from date-fns
+    const start = startOfMonth(nowInColombo, { timeZone });
+    const end = endOfMonth(nowInColombo, { timeZone });
+    return { start, end };
 };
 
-// Helper to get the start and end of the previous month
+// Helper to get the start and end of the previous month using Colombo Timezone
 const getPreviousMonthBounds = () => {
-    const now = new Date();
-    const firstDayOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastDayOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-    firstDayOfPreviousMonth.setHours(0, 0, 0, 0);
-    lastDayOfPreviousMonth.setHours(23, 59, 59, 999);
-    return { start: firstDayOfPreviousMonth, end: lastDayOfPreviousMonth };
+     const now = new Date();
+     // Use toZonedTime from date-fns-tz
+     const nowInColombo = toZonedTime(now, timeZone);
+     // Use core functions from date-fns
+     const startOfCurrentMonth = startOfMonth(nowInColombo, { timeZone });
+     const startOfPreviousMonth = subMonths(startOfCurrentMonth, 1);
+     const endOfPreviousMonth = endOfMonth(startOfPreviousMonth, { timeZone });
+     return { start: startOfPreviousMonth, end: endOfPreviousMonth };
 };
+
 
 // Helper function to calculate percentage change
 const calculatePercentageChange = (current, previous) => {
@@ -60,8 +72,9 @@ const calculatePercentageChange = (current, previous) => {
 // Get total payments made this week (Monday-Sunday) and percentage change from last week
 exports.getWeeklyPaymentsSummary = async (req, res) => {
     try {
-        const currentWeek = getCurrentWeekBounds();
-        const previousWeek = getPreviousWeekBounds();
+        const currentWeek = getCurrentWeekBounds(); // Uses Colombo TZ
+        const previousWeek = getPreviousWeekBounds(); // Uses Colombo TZ
+        
         const sql = `SELECT SUM(amount_paid) as totalAmount FROM payment_history WHERE payment_date BETWEEN ? AND ?`;
 
         const [[currentRows], [previousRows]] = await Promise.all([
@@ -69,8 +82,8 @@ exports.getWeeklyPaymentsSummary = async (req, res) => {
             pool.query(sql, [previousWeek.start, previousWeek.end])
         ]);
 
-        const currentAmount = currentRows[0].totalAmount || 0;
-        const previousAmount = previousRows[0].totalAmount || 0;
+        const currentAmount = currentRows[0]?.totalAmount || 0; // Use optional chaining
+        const previousAmount = previousRows[0]?.totalAmount || 0; // Use optional chaining
         const percentageChange = calculatePercentageChange(currentAmount, previousAmount);
 
         res.status(200).json({
@@ -86,8 +99,8 @@ exports.getWeeklyPaymentsSummary = async (req, res) => {
 // Get total payments made this month and percentage change from last month
 exports.getMonthlyPaymentsSummary = async (req, res) => {
     try {
-        const currentMonth = getCurrentMonthBounds();
-        const previousMonth = getPreviousMonthBounds();
+        const currentMonth = getCurrentMonthBounds(); // Uses Colombo TZ
+        const previousMonth = getPreviousMonthBounds(); // Uses Colombo TZ
         const sql = `SELECT SUM(amount_paid) as totalAmount FROM payment_history WHERE payment_date BETWEEN ? AND ?`;
 
         const [[currentRows], [previousRows]] = await Promise.all([
@@ -112,8 +125,8 @@ exports.getMonthlyPaymentsSummary = async (req, res) => {
 // Get count of loans created this month and percentage change from last month
 exports.getMonthlyLoansCountSummary = async (req, res) => {
     try {
-        const currentMonth = getCurrentMonthBounds();
-        const previousMonth = getPreviousMonthBounds();
+        const currentMonth = getCurrentMonthBounds(); // Uses Colombo TZ
+        const previousMonth = getPreviousMonthBounds(); // Uses Colombo TZ
         const sql = `SELECT COUNT(loan_id) as count FROM loans WHERE created_at BETWEEN ? AND ?`;
 
         const [[currentRows], [previousRows]] = await Promise.all([
@@ -138,8 +151,8 @@ exports.getMonthlyLoansCountSummary = async (req, res) => {
 // Get count of new clients this month and percentage change from last month
 exports.getMonthlyNewClientsSummary = async (req, res) => {
     try {
-        const currentMonth = getCurrentMonthBounds();
-        const previousMonth = getPreviousMonthBounds();
+        const currentMonth = getCurrentMonthBounds(); // Uses Colombo TZ
+        const previousMonth = getPreviousMonthBounds(); // Uses Colombo TZ
 
         const currentSql = `SELECT COUNT(client_id) as count FROM clients WHERE created_at BETWEEN ? AND ?`;
         const previousSql = `SELECT COUNT(client_id) as count FROM clients WHERE created_at BETWEEN ? AND ?`;

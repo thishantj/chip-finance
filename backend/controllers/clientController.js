@@ -1,6 +1,8 @@
 const Client = require('../models/Client');
 const Loan = require('../models/Loan');
 const Installment = require('../models/Installment');
+const PaymentHistory = require('../models/PaymentHistory'); // Corrected import
+const pool = require('../config/db'); // Import pool for direct queries if needed
 
 exports.addClient = async (req, res) => {
   const { name, nic, address, telephone } = req.body;
@@ -81,21 +83,60 @@ exports.updateClient = async (req, res) => {
   }
 };
 
+// --- Delete Client and Associated Data ---
 exports.deleteClient = async (req, res) => {
-  const { id } = req.params; // ID of the client to delete
-
-  // Note: Unlike admins, we might not need to prevent deleting oneself here,
-  // unless clients can log in and manage their own data. Assuming only admins manage clients.
+  const { id } = req.params;
+  const connection = await pool.getConnection(); // Get connection for transaction
 
   try {
-      const affectedRows = await Client.deleteById(id);
-      if (affectedRows === 0) {
-          return res.status(404).json({ message: 'Client not found.' });
+      await connection.beginTransaction();
+
+      // 1. Find all loans associated with the client
+      const loans = await Loan.findByClientId(id, connection); // Pass connection
+
+      if (loans.length > 0) {
+          const loanIds = loans.map(loan => loan.loan_id);
+
+          // 2. Find all installment IDs for these loans
+          let allInstallmentIds = [];
+          for (const loanId of loanIds) {
+              const installmentIds = await Installment.findIdsByLoanId(loanId, connection); // Pass connection
+              allInstallmentIds = allInstallmentIds.concat(installmentIds);
+          }
+
+          // 3. Delete payment history associated with these installments (if any)
+          if (allInstallmentIds.length > 0) {
+              await PaymentHistory.deleteByInstallmentIds(allInstallmentIds, connection); // Pass connection
+          }
+
+          // 4. Delete installments associated with these loans
+          for (const loanId of loanIds) {
+              await Installment.deleteByLoanId(loanId, connection); // Pass connection
+          }
+
+          // 5. Delete the loans
+          for (const loanId of loanIds) {
+              await Loan.delete(loanId, connection); // Pass connection
+          }
       }
-      res.status(200).json({ message: 'Client deleted successfully.' });
+
+      // 6. Delete the client
+      const affectedRows = await Client.delete(id, connection); // Pass connection
+
+      if (affectedRows === 0) {
+          await connection.rollback(); // Rollback if client not found/deleted
+          return res.status(404).json({ message: 'Client not found' });
+      }
+
+      await connection.commit(); // Commit transaction
+      res.status(200).json({ message: 'Client and all associated data deleted successfully' });
+
   } catch (error) {
+      await connection.rollback(); // Rollback on any error
       console.error(`Error deleting client ${id}:`, error);
-      res.status(500).json({ message: 'Server error deleting client.' });
+      res.status(500).json({ message: 'Server error deleting client' });
+  } finally {
+      connection.release(); // Always release connection
   }
 };
 
@@ -139,43 +180,100 @@ exports.getClientDetailsWithLoans = async (req, res) => {
   }
 };
 
-// --- New Controller Function for Loan Summary ---
-exports.getClientLoanSummary = async (req, res) => {
+// --- New Controller Function for Client Summary DATA (JSON) ---
+exports.getClientSummary = async (req, res) => {
     const { clientId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    console.log(`[Controller] Fetching Client Summary Data for Client ID: ${clientId}, Dates: ${startDate} to ${endDate}`); // Added log
+
+    if (!clientId || !startDate || !endDate) {
+        return res.status(400).json({ message: 'Client ID, start date, and end date are required.' });
+    }
+
     try {
+        // 1. Check if client exists
         const client = await Client.findById(clientId);
         if (!client) {
-            return res.status(404).json({ message: 'Client not found' });
+            console.log(`[Controller] Client not found for ID: ${clientId}`); // Added log
+            return res.status(404).json({ message: 'Client not found.' });
         }
 
-        const activeLoans = await Loan.findActiveByClientId(clientId);
-        const loanSummaries = [];
+        // 2. Fetch necessary data using Model methods
+        console.log(`[Controller] Fetching summary data for Client ID: ${clientId}`); // Updated log
+        const totalRemainingBalance = await Loan.getTotalRemainingBalanceByClient(clientId);
+        const totalDueActiveLoans = await Loan.getTotalDueForActiveLoansByClient(clientId);
+        // Corrected model name from Payment to PaymentHistory
+        const totalPaidInRange = await PaymentHistory.getTotalPaidByClientInRange(clientId, startDate, endDate);
 
-        for (const loan of activeLoans) {
-            const nextInstallment = await Installment.findNextPendingInstallment(loan.loan_id);
-            const paidCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'paid');
-            // Use countPendingByLoanId to specifically count installments with 'pending' status
-            const pendingCount = await Installment.countPendingByLoanId(loan.loan_id);
 
-            loanSummaries.push({
-                loan_id: loan.loan_id,
-                principal_amount: loan.principal_amount,
-                total_amount_due: loan.total_amount_due,
-                remaining_balance: loan.remaining_balance,
-                next_payment_date: nextInstallment ? nextInstallment.due_date : null,
-                next_installment_id: nextInstallment ? nextInstallment.installment_id : null,
-                next_installment_amount: nextInstallment ? nextInstallment.amount_due : null,
-                installments_paid: paidCount,
-                installments_remaining: pendingCount, // Correctly uses count of pending installments
-                loan_status: loan.status,
-            });
-        }
+        // 3. Construct the summary object
+        const summaryData = {
+            // Include basic client info if needed
+            // clientId: client.client_id,
+            // clientName: client.name,
+            overallSummary: {
+                total_remaining_balance_all_loans: totalRemainingBalance,
+                total_due_all_active_loans: totalDueActiveLoans,
+                total_paid_in_range_all_loans: totalPaidInRange,
+            },
+            // Optionally include detailed lists if needed by the frontend later
+            // activeLoans: [],
+            // completedLoans: [],
+            // paymentsInRange: [],
+        };
 
-        res.status(200).json({ client, loanSummaries });
+        console.log(`[Controller] Sending summary data for Client ID: ${clientId}`, summaryData); // Added log
+        res.status(200).json(summaryData);
 
     } catch (error) {
-        console.error(`Error getting loan summary for client ${clientId}:`, error);
-        res.status(500).json({ message: 'Server error fetching loan summary' });
+        console.error(`[Controller] Error fetching client summary data for client ${clientId}:`, error); // Added log
+        res.status(500).json({ message: 'Server error fetching client summary data.' });
     }
 };
 // --- End New Controller Function ---
+
+// --- New Controller Function for Loan Summary ---
+exports.getClientLoanSummary = async (req, res) => {
+    const { clientId } = req.params;
+
+    try {
+        // 1. Find active or recently paid loans for the client
+        const loans = await Loan.findByClientIdWithDetails(clientId);
+
+        if (!loans || loans.length === 0) {
+            return res.status(200).json({ loanSummaries: [] }); // Return empty array if no loans
+        }
+
+        // 2. For each loan, gather summary details
+        const loanSummaries = await Promise.all(loans.map(async (loan) => {
+            const installments = await Installment.findByLoanId(loan.loan_id);
+            const paidCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'paid');
+            const pendingCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'pending');
+            // const overdueCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'overdue'); // Add if needed
+
+            const nextPendingInstallment = await Installment.findNextPendingInstallment(loan.loan_id);
+
+            return {
+                loan_id: loan.loan_id,
+                principal_amount: loan.principal_amount,
+                interest_rate: loan.interest_rate,
+                total_amount_due: loan.total_amount_due, // Assuming this is calculated and stored
+                remaining_balance: loan.remaining_balance, // Assuming this is tracked
+                status: loan.status,
+                installments_paid: paidCount,
+                installments_remaining: pendingCount, // Or total - paidCount
+                next_payment_date: loan.next_payment_date, // Use the stored next payment date
+                next_installment_id: nextPendingInstallment ? nextPendingInstallment.installment_id : null,
+                next_installment_amount: nextPendingInstallment ? nextPendingInstallment.amount_due : null,
+                // Add other relevant loan details if needed
+            };
+        }));
+
+        res.status(200).json({ loanSummaries });
+
+    } catch (error) {
+        console.error(`Error fetching loan summary for client ${clientId}:`, error);
+        res.status(500).json({ message: 'Server error fetching loan summary' });
+    }
+};

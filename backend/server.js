@@ -10,6 +10,9 @@ const clientRoutes = require('./routes/clientRoutes');
 const loanRoutes = require('./routes/loanRoutes');
 const installmentRoutes = require('./routes/installmentRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes'); // Import dashboard routes
+const authRoutes = require('./routes/authRoutes');
+// const paymentRoutes = require('./routes/paymentRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -21,6 +24,13 @@ app.use(cors({
 }));
 app.use(express.json()); // For parsing application/json
 app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
+
+// --- Add Request Logger ---
+app.use((req, res, next) => {
+  console.log(`[Server] Received request: ${req.method} ${req.originalUrl}`);
+  next(); // Pass control to the next middleware/route handler
+});
+// --- End Request Logger ---
 
 // Session configuration
 app.use(session({
@@ -37,10 +47,13 @@ app.use(session({
 
 // API Routes
 app.use('/api/admins', adminRoutes);
-app.use('/api/clients', clientRoutes); // Use client routes with base path /api/clients
+app.use('/api/auth', authRoutes);
+app.use('/api/clients', clientRoutes); // Ensure this uses clientRoutes
 app.use('/api/loans', loanRoutes);
 app.use('/api/installments', installmentRoutes);
-app.use('/api/dashboard', dashboardRoutes); // Register dashboard routes
+// app.use('/api/payments', paymentRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportRoutes); // Ensure this uses reportRoutes
 
 // Basic route for testing
 app.get('/', (req, res) => {

@@ -77,8 +77,8 @@ function SignIn() {
       title="Nice to see you!"
       color="white"
       description="Enter your username and password to sign in" // Updated description
-      premotto="INSPIRED BY THE FUTURE:"
-      motto="THE VISION UI DASHBOARD"
+      // premotto="INSPIRED BY THE FUTURE:"
+      motto="SUN PIVOTAL INVESTMENT"
       image={bgSignIn}
       showNavbar={false} // Pass showNavbar={false}
     >

@@ -47,7 +47,7 @@ micro-finance/
 │   │   │       └── theme-rtl.js
 │   │   ├── components/ # Reusable Vui components
 │   │   ├── context/
-│   │   ├── examples/   # Vision UI specific example components
+│   │   ├── examples/   # UI specific example components
 │   │   ├── layouts/    # Page layouts (Dashboard, Billing, Profile, etc.)
 │   │   ├── variables/
 │   │   ├── App.js

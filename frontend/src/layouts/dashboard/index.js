@@ -22,7 +22,7 @@ import colors from "assets/theme/base/colors";
 
 // Dashboard layout components
 import Projects from "layouts/dashboard/components/Projects";
-import OrderOverview from "layouts/dashboard/components/OrderOverview";
+import LatestTransactions from "layouts/dashboard/components/OrderOverview"; // Import renamed component
 import ClientSummaryReportCard from "layouts/dashboard/components/ClientSummaryReportCard";
 import NetProfitReportCard from "layouts/dashboard/components/NetProfitReportCard";
 
@@ -43,6 +43,9 @@ const formatCurrency = (amount) => {
     });
 };
 
+// Define or import lineChartOptionsDashboard and barChartOptionsDashboard if they are used
+const lineChartOptionsDashboard = { /* ... options ... */ };
+const barChartOptionsDashboard = { /* ... options ... */ };
 
 function Dashboard() {
   const { gradients } = colors;
@@ -242,7 +245,8 @@ function Dashboard() {
             <Stack spacing={3}>
               <ClientSummaryReportCard />
               <NetProfitReportCard />
-              <OrderOverview />
+              {/* Use the renamed component */}
+              <LatestTransactions />
             </Stack>
           </Grid>
         </Grid>
@@ -252,7 +256,3 @@ function Dashboard() {
 }
 
 export default Dashboard;
-
-// Define or import lineChartOptionsDashboard and barChartOptionsDashboard if they are used
-const lineChartOptionsDashboard = { /* ... options ... */ };
-const barChartOptionsDashboard = { /* ... options ... */ };

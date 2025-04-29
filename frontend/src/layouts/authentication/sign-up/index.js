@@ -42,8 +42,8 @@ function SignIn() {
       color="white"
       description="Use these awesome forms to login or create new account in your project for free."
       image={bgSignIn}
-      premotto="INSPIRED BY THE FUTURE:"
-      motto="THE VISION UI DASHBOARD"
+      // premotto="INSPIRED BY THE FUTURE:"
+      motto="SUN PIVOTAL INVESTMENT"
       cardContent
     >
       <GradientBorder borderRadius={borders.borderRadius.form} minWidth="100%" maxWidth="100%">

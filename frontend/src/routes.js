@@ -1,5 +1,5 @@
 /** 
-  All of the routes for the Vision UI Dashboard React are added here,
+  All of the routes for the UI Dashboard React are added here,
   You can add a new route, customize the routes and delete the routes here.
 
   Once you add a new route on this file it will be visible automatically on

@@ -19,34 +19,29 @@ import Alert from "@mui/material/Alert"; // Import Alert
 import Select from "@mui/material/Select"; // Import Select
 import MenuItem from "@mui/material/MenuItem"; // Import MenuItem
 import FormControl from "@mui/material/FormControl"; // Import FormControl
-import InputLabel from "@mui/material/InputLabel";
+// Add Dialog imports
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
 import VuiTypography from "components/VuiTypography";
 import VuiInput from "components/VuiInput";
-import VuiButton from "components/VuiButton"; // Ensure VuiButton is imported if needed elsewhere
-import VuiAlert from "components/VuiAlert"; // Ensure VuiAlert is imported
+import VuiButton from "components/VuiButton";
+import GradientBorder from "examples/GradientBorder";
+import VuiAlert from "components/VuiAlert"; // Import VuiAlert
 
 // Vision UI Dashboard React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
-// Vision UI Dashboard React base styles
-import colors from "assets/theme/base/colors";
-import borders from "assets/theme/base/borders";
-import typography from "assets/theme/base/typography"; // Import typography
-
-// Layout specific components
-import GradientBorder from "examples/GradientBorder";
-
 // Vision UI Dashboard assets
 import radialGradient from "assets/theme/functions/radialGradient";
-import palette from "assets/theme/base/colors"; // Use palette directly
-
-// Data
-// import authorsTableData from "layouts/tables/data/authorsTableData"; // Remove if not used
-// import projectsTableData from "layouts/tables/data/projectsTableData"; // Remove if not used
+import linearGradient from "assets/theme/functions/linearGradient"; // Import linearGradient
+import palette from "assets/theme/base/colors";
+import borders from "assets/theme/base/borders";
 
 // Function to format date (assuming it's needed for the table)
 const formatDate = (dateString) => {
@@ -80,9 +75,8 @@ function Loans() {
   const [isLoadingLoans, setIsLoadingLoans] = useState(true);
   const [openSnackbar, setOpenSnackbar] = useState(false); // State for Snackbar
 
-  // Form State
+  // Add Form State
   const [principal, setPrincipal] = useState("");
-  // const [loanTermDays, setLoanTermDays] = useState(""); // Replaced by calculatedTermInDays
   const [loanTermValue, setLoanTermValue] = useState(""); // Value entered by user
   const [loanTermUnit, setLoanTermUnit] = useState("Days"); // Unit selected (Days, Weeks, Months)
   const [installmentFrequencyDays, setInstallmentFrequencyDays] = useState("");
@@ -94,9 +88,28 @@ function Loans() {
   const [calculatedTermInDays, setCalculatedTermInDays] = useState(0); // Store term converted to days
   const [lastEditedField, setLastEditedField] = useState(null); // Track last edited field
 
+  // --- Edit Dialog State ---
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState(null); // Loan being edited
+  const [editPrincipal, setEditPrincipal] = useState("");
+  const [editInterestRate, setEditInterestRate] = useState("");
+  const [editLoanTermValue, setEditLoanTermValue] = useState("");
+  const [editLoanTermUnit, setEditLoanTermUnit] = useState("Days");
+  const [editInstallmentFrequencyDays, setEditInstallmentFrequencyDays] = useState("");
+  const [editManualInstallmentAmount, setEditManualInstallmentAmount] = useState("");
+  const [editCalculatedTermInDays, setEditCalculatedTermInDays] = useState(0);
+  const [editCalculatedTotalDue, setEditCalculatedTotalDue] = useState(0);
+  const [editCalculatedInstallmentAmount, setEditCalculatedInstallmentAmount] = useState(0);
+  const [editNumberOfInstallments, setEditNumberOfInstallments] = useState(0);
+  const [editError, setEditError] = useState('');
+  const [isEditing, setIsEditing] = useState(false); // Loading state for edit submit
+  const [editLastEditedField, setEditLastEditedField] = useState(null); // Track focus in edit dialog
+  // --- End Edit Dialog State ---
+
+
   const theme = useTheme(); // Get theme object
   const { palette, borders, typography } = theme; // Destructure theme properties
-  const { gradients, info, grey, background } = palette; // Destructure from palette
+  const { gradients, info, grey, background, primary, secondary, error: errorColor, success: successColor, warning: warningColor, text } = palette; // Destructure from palette
   const { borderRadius } = borders; // Destructure from borders
   const { size } = typography; // Destructure from typography
 
@@ -108,7 +121,7 @@ function Loans() {
       setOpenSnackbar(false);
   };
 
-  // --- Input Change Handlers (to clear errors and track focus) ---
+  // --- Input Change Handlers (Add Form) ---
   const handlePrincipalChange = (e) => {
     setPrincipal(e.target.value);
     clearCalculationError();
@@ -145,7 +158,7 @@ function Loans() {
     setLastEditedField("manualInstallment");
   };
 
-  // --- Helper to clear calculation-specific errors ---
+  // --- Helper to clear calculation-specific errors (Add Form) ---
   const clearCalculationError = () => {
       // Only clear the specific negative interest error, leave others
       if (addError === "Manual installment amount is too low, resulting in negative interest.") {
@@ -180,9 +193,9 @@ function Loans() {
     fetchLoans();
   }, [fetchLoans]);
 
-  // --- Calculations ---
+  // --- Calculations (Add Form) ---
 
-  // Calculate Term in Days whenever value or unit changes
+  // Calculate Term in Days whenever value or unit changes (Add Form)
   useEffect(() => {
     const termVal = parseInt(loanTermValue, 10);
     if (isNaN(termVal) || termVal <= 0) {
@@ -201,13 +214,12 @@ function Loans() {
     setCalculatedTermInDays(days);
   }, [loanTermValue, loanTermUnit]);
 
-  // Calculate Total Due (triggered by principal or interest rate)
+  // Calculate Total Due (Add Form)
   useEffect(() => {
     // Only run if principal or interest rate was the last edited field
     if (lastEditedField === 'principal' || lastEditedField === 'interestRate') {
         const principalNum = parseFloat(principal);
         const rateNum = parseFloat(interestRate);
-
         if (!isNaN(principalNum) && principalNum > 0 && !isNaN(rateNum) && rateNum >= 0) {
             const total = principalNum * (1 + rateNum / 100);
             setCalculatedTotalDue(total);
@@ -215,9 +227,9 @@ function Loans() {
             setCalculatedTotalDue(0);
         }
     }
-  }, [principal, interestRate, lastEditedField]); // Add lastEditedField dependency
+  }, [principal, interestRate, lastEditedField]);
 
-  // Calculate Installment Amount (triggered by totalDue, term, frequency)
+  // Calculate Installment Amount (Add Form)
   useEffect(() => {
     // Only run if NOT triggered by manualInstallment change
      if (lastEditedField !== 'manualInstallment') {
@@ -242,9 +254,9 @@ function Loans() {
         }
      }
     // Depend on calculatedTermInDays
-  }, [calculatedTotalDue, calculatedTermInDays, installmentFrequencyDays, lastEditedField]); // Add lastEditedField dependency
+  }, [calculatedTotalDue, calculatedTermInDays, installmentFrequencyDays, lastEditedField]);
 
-  // Recalculate Interest Rate (triggered by manualInstallment change)
+  // Recalculate Interest Rate (Add Form)
   useEffect(() => {
       // Only run if manualInstallment was the last edited field
       if (lastEditedField === 'manualInstallment') {
@@ -278,15 +290,14 @@ function Loans() {
               // Maybe show a different error or just don't update the rate
           }
       }
-  }, [manualInstallmentAmount, principal, calculatedTermInDays, installmentFrequencyDays, lastEditedField]); // Add lastEditedField dependency
+  }, [manualInstallmentAmount, principal, calculatedTermInDays, installmentFrequencyDays, lastEditedField]);
 
-  // --- Event Handlers ---
+  // --- Event Handlers (Add Form) ---
   const handleClientSearch = async (event) => {
     const searchTerm = event.target.value;
     setClientSearchTerm(searchTerm);
     setSelectedClient(null); // Clear selected client when searching
     setSearchedClients([]); // Clear previous results immediately
-
     if (searchTerm.trim().length < 2) {
       setIsSearchingClients(false);
       return;
@@ -427,15 +438,119 @@ function Loans() {
     }
   };
 
-  // --- New Edit/Delete Handlers ---
-  const handleEditLoan = (loanId) => {
-    // Placeholder for edit functionality
-    alert(`Edit functionality for loan ${loanId} is not yet implemented.`);
-    // Later: Open a modal, fetch loan details, populate form, handle update submission
+  // --- Edit/Delete Loan Handlers ---
+  const handleOpenEditDialog = (loan) => {
+    setSelectedLoan(loan);
+    setEditPrincipal(loan.principal_amount.toString());
+    setEditInterestRate(loan.interest_rate.toString());
+    // Need to reverse calculate term value/unit from loan_term_days
+    // For simplicity, default to days for now, or implement logic if needed
+    setEditLoanTermValue(loan.loan_term_days.toString());
+    setEditLoanTermUnit("Days"); // Default or calculate based on common factors (7, 30)
+    setEditInstallmentFrequencyDays(loan.installment_frequency_days.toString());
+    // Convert to number before calling toFixed, handle potential null/undefined/NaN
+    const installmentAmountNum = parseFloat(loan.installment_amount);
+    setEditManualInstallmentAmount(
+        !isNaN(installmentAmountNum) ? installmentAmountNum.toFixed(2) : '0.00' // Default to '0.00' if invalid
+    );
+
+    // Trigger initial calculations for the dialog
+    setEditCalculatedTermInDays(loan.loan_term_days); // Start with the stored days
+    // Initial calculations will run via useEffects based on these populated values
+
+    setEditError(''); // Clear previous errors
+    setEditDialogOpen(true);
   };
 
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false);
+    setSelectedLoan(null); // Clear selected loan on close
+    setIsEditing(false); // Reset loading state
+    setEditError(''); // Clear errors
+    // Reset edit form state if needed
+  };
+
+  const handleUpdateLoan = async (event) => {
+    event.preventDefault();
+    setEditError('');
+    setSuccessMessage('');
+    setIsEditing(true); // Set loading state
+
+    // --- Validation (similar to Add Loan, using edit state) ---
+    const termDaysNum = editCalculatedTermInDays;
+    const principalNum = parseFloat(editPrincipal);
+    const freqNum = parseInt(editInstallmentFrequencyDays, 10);
+    const rateNum = parseFloat(editInterestRate);
+    const installmentNum = parseFloat(editManualInstallmentAmount);
+
+    if (!editPrincipal || termDaysNum <= 0 || !editInstallmentFrequencyDays || !editInterestRate || !editManualInstallmentAmount) {
+      setEditError("Principal, Term, Frequency, Interest Rate, and Installment Amount are required.");
+      setIsEditing(false);
+      return;
+    }
+    if (isNaN(principalNum) || principalNum <= 0 ||
+        isNaN(freqNum) || freqNum <= 0 ||
+        isNaN(rateNum) || rateNum < 0 ||
+        isNaN(installmentNum) || installmentNum <= 0) {
+      setEditError("Please enter valid numeric values for loan details.");
+      setIsEditing(false);
+      return;
+    }
+    if (termDaysNum < freqNum) {
+        setEditError("Loan term (in days) cannot be less than installment frequency.");
+        setIsEditing(false);
+        return;
+    }
+    // Re-check for negative interest based on final values
+    const finalNumInstallments = Math.ceil(termDaysNum / freqNum);
+    const finalTotalRepayment = installmentNum * finalNumInstallments;
+    if (finalTotalRepayment < principalNum) {
+         setEditError("Manual installment amount is too low, resulting in negative interest.");
+         setIsEditing(false);
+         return; // Prevent submission
+    }
+    // --- End Validation ---
+
+    try {
+      const token = getToken();
+      if (!token) {
+        setEditError("Authentication token not found.");
+        setIsEditing(false);
+        return;
+      }
+
+      const payload = {
+        principal_amount: principalNum,
+        interest_rate: rateNum,
+        loan_term_days: termDaysNum, // Send calculated term in days
+        installment_frequency_days: freqNum,
+        installment_amount: installmentNum, // Send the potentially manually adjusted installment amount
+        // Client ID is not changed, it's part of the URL
+      };
+
+      // Assume PUT /api/loans/:id endpoint exists
+      const response = await axios.put(
+        `${process.env.REACT_APP_API_BASE_URL}/api/loans/${selectedLoan.loan_id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSuccessMessage(response.data.message || 'Loan updated successfully!');
+      setOpenSnackbar(true);
+      handleCloseEditDialog(); // Close dialog on success
+      fetchLoans(); // Refresh the list
+
+    } catch (err) {
+      console.error("Error updating loan:", err);
+      setEditError(err.response?.data?.message || "Failed to update loan.");
+    } finally {
+        setIsEditing(false); // Reset loading state
+    }
+  };
+
+
   const handleDeleteLoan = async (loanId) => {
-    if (window.confirm(`Are you sure you want to delete loan with ID: ${loanId}? This will also delete all associated installments.`)) {
+    if (window.confirm(`Are you sure you want to delete loan with ID: ${loanId}? This will also delete all associated installments and payment history.`)) {
       try {
         setError(''); // Clear previous table errors
         setSuccessMessage(''); // Clear success message on new action
@@ -457,7 +572,85 @@ function Loans() {
       }
     }
   };
-  // --- End New Edit/Delete Handlers ---
+  // --- End Edit/Delete Loan Handlers ---
+
+  // --- Calculations (Edit Dialog) ---
+
+  // Helper to clear calculation-specific errors (Edit Dialog)
+  const clearEditCalculationError = () => {
+      if (editError === "Manual installment amount is too low, resulting in negative interest.") {
+          setEditError("");
+      }
+  };
+
+  // Calculate Term in Days (Edit Dialog)
+  useEffect(() => {
+    const termVal = parseInt(editLoanTermValue, 10);
+    if (isNaN(termVal) || termVal <= 0) {
+      setEditCalculatedTermInDays(0); return;
+    }
+    let days = 0;
+    if (editLoanTermUnit === 'Days') days = termVal;
+    else if (editLoanTermUnit === 'Weeks') days = termVal * 7;
+    else if (editLoanTermUnit === 'Months') days = termVal * 30;
+    setEditCalculatedTermInDays(days);
+  }, [editLoanTermValue, editLoanTermUnit]);
+
+  // Calculate Total Due (Edit Dialog)
+  useEffect(() => {
+    if (editLastEditedField === 'editPrincipal' || editLastEditedField === 'editInterestRate') {
+        const principalNum = parseFloat(editPrincipal);
+        const rateNum = parseFloat(editInterestRate);
+        if (!isNaN(principalNum) && principalNum > 0 && !isNaN(rateNum) && rateNum >= 0) {
+            setEditCalculatedTotalDue(principalNum * (1 + rateNum / 100));
+        } else { setEditCalculatedTotalDue(0); }
+    }
+  }, [editPrincipal, editInterestRate, editLastEditedField]);
+
+  // Calculate Installment Amount (Edit Dialog)
+  useEffect(() => {
+     if (editLastEditedField !== 'editManualInstallment') {
+        const totalDueNum = parseFloat(editCalculatedTotalDue);
+        const termDaysNum = editCalculatedTermInDays;
+        const freqNum = parseInt(editInstallmentFrequencyDays, 10);
+        if (!isNaN(totalDueNum) && totalDueNum > 0 && termDaysNum > 0 && !isNaN(freqNum) && freqNum > 0 && termDaysNum >= freqNum) {
+            const numInstallments = Math.ceil(termDaysNum / freqNum);
+            setEditNumberOfInstallments(numInstallments);
+            const installment = totalDueNum / numInstallments;
+            setEditCalculatedInstallmentAmount(installment);
+            setEditManualInstallmentAmount(installment.toFixed(2)); // Update manual field
+            clearEditCalculationError();
+        } else {
+            setEditNumberOfInstallments(0);
+            setEditCalculatedInstallmentAmount(0);
+        }
+     }
+  }, [editCalculatedTotalDue, editCalculatedTermInDays, editInstallmentFrequencyDays, editLastEditedField]);
+
+  // Recalculate Interest Rate (Edit Dialog)
+  useEffect(() => {
+      if (editLastEditedField === 'editManualInstallment') {
+          clearEditCalculationError();
+          const manualInstallmentNum = parseFloat(editManualInstallmentAmount);
+          const principalNum = parseFloat(editPrincipal);
+          const termDaysNum = editCalculatedTermInDays;
+          const freqNum = parseInt(editInstallmentFrequencyDays, 10);
+          if (!isNaN(manualInstallmentNum) && manualInstallmentNum > 0 && !isNaN(principalNum) && principalNum > 0 && termDaysNum > 0 && !isNaN(freqNum) && freqNum > 0 && termDaysNum >= freqNum) {
+              const numInstallments = Math.ceil(termDaysNum / freqNum);
+              const totalRepayment = manualInstallmentNum * numInstallments;
+              if (totalRepayment >= principalNum) {
+                  const rate = ((totalRepayment / principalNum) - 1) * 100;
+                  setEditInterestRate(rate.toFixed(2));
+                  setEditCalculatedTotalDue(totalRepayment); // Update total due
+              } else {
+                  setEditError("Manual installment amount is too low, resulting in negative interest.");
+              }
+          }
+      }
+  }, [editManualInstallmentAmount, editPrincipal, editCalculatedTermInDays, editInstallmentFrequencyDays, editLastEditedField]);
+
+  // --- End Calculations (Edit Dialog) ---
+
 
   // --- Table Data ---
   // Filter loans based on loanSearchTerm (Client Name, NIC, Loan ID)
@@ -513,7 +706,7 @@ function Loans() {
     ),
     // New Row Data for Remaining Balance
     remaining_balance: (
-      <VuiTypography variant="caption" color={loan.remaining_balance <= 0 ? "success" : "white"} fontWeight="medium">
+      <VuiTypography variant="caption" color={loan.remaining_balance <= 0 ? successColor.main : "white"} fontWeight="medium">
         {formatCurrency(loan.remaining_balance)}
       </VuiTypography>
     ),
@@ -535,7 +728,7 @@ function Loans() {
     interest_rate: ( // Added Interest Rate data
         <VuiTypography variant="caption" color="white" fontWeight="medium">
           {/* Check if interest_rate is a number before calling toFixed */}
-          {loan.interest_rate}
+          {typeof loan.interest_rate === 'number' ? loan.interest_rate.toFixed(2) : 'N/A'}%
         </VuiTypography>
     ),
     created_at: ( // Changed from start_date
@@ -545,14 +738,23 @@ function Loans() {
       </VuiTypography>
     ),
     status: (
-      <VuiTypography variant="caption" color={loan.status === 'Active' ? "success" : loan.status === 'Completed' ? "info" : "error"} fontWeight="medium">
-        {loan.status}
+      <VuiTypography
+        variant="caption"
+        color={
+            loan.status === 'active' ? warningColor.main :
+            loan.status === 'fully_paid' ? successColor.main :
+            loan.status === 'overdue' ? errorColor.main : // Assuming an 'overdue' status might exist
+            text.main // Default color
+        }
+        fontWeight="medium"
+      >
+        {loan.status ? loan.status.replace('_', ' ').toUpperCase() : 'N/A'}
       </VuiTypography>
     ),
     action: (
       <VuiBox display="flex" justifyContent="center" alignItems="center">
-        {/* Edit button */}
-        <IconButton size="small" color="info" sx={{ margin: '0 4px' }} onClick={() => handleEditLoan(loan.loan_id)}>
+        {/* Edit button - Updated onClick */}
+        <IconButton size="small" color="info" sx={{ margin: '0 4px' }} onClick={() => handleOpenEditDialog(loan)}>
           <Icon>edit</Icon>
         </IconButton>
         {/* Delete button */}
@@ -1002,10 +1204,154 @@ function Loans() {
                 </VuiBox>
                  // --- End Scrollable Table Container ---
             )}
-            
+
           </Card>
         </VuiBox>
       </VuiBox>
+
+      {/* --- Edit Loan Dialog --- */}
+      <Dialog
+        open={editDialogOpen}
+        onClose={handleCloseEditDialog}
+        PaperProps={{
+            component: 'form',
+            onSubmit: handleUpdateLoan,
+             sx: {
+                backgroundColor: 'rgba(20, 20, 30, 0.95)',
+                backdropFilter: 'blur(5px)',
+                border: `1px solid ${grey[700]}`,
+                borderRadius: borderRadius.lg,
+                color: 'white',
+                maxWidth: '800px', // Increased width
+                width: '100%', // Ensure it uses the available width up to maxWidth
+             }
+        }}
+      >
+        <DialogTitle sx={{ color: 'white', borderBottom: `1px solid ${grey[700]}` }}>
+            Edit Loan Details
+        </DialogTitle>
+        <DialogContent sx={{ paddingTop: '20px !important' }}>
+          {editError && (
+            <Alert severity="error" sx={{ mb: 2, width: '100%', '.MuiAlert-message': { color: 'white' } }} onClose={() => setEditError('')}>
+              {editError}
+            </Alert>
+          )}
+          {/* Display Loan ID and Client Info (Read-only) */}
+          <Grid container spacing={2} mb={2}>
+             <Grid item xs={12} sm={6}>
+                <VuiTypography variant="button" color="text" fontWeight="medium">Loan ID:</VuiTypography>
+                <VuiTypography variant="body2" color="white" ml={1}>{selectedLoan?.loan_id}</VuiTypography>
+             </Grid>
+             <Grid item xs={12} sm={6}>
+                <VuiTypography variant="button" color="text" fontWeight="medium">Client:</VuiTypography>
+                <VuiTypography variant="body2" color="white" ml={1}>
+                    {selectedLoan?.client_name} ({selectedLoan?.client_nic})
+                </VuiTypography>
+             </Grid>
+          </Grid>
+
+          {/* Edit Form Fields */}
+          <Grid container spacing={2}>
+            {/* Principal */}
+            <Grid item xs={12} sm={6}>
+              <VuiBox mb={2}>
+                <VuiBox mb={1} ml={0.5}><VuiTypography component="label" variant="button" color="white" fontWeight="medium">Principal (LKR)</VuiTypography></VuiBox>
+                <GradientBorder borderRadius={borderRadius.lg} padding="1px" backgroundImage={radialGradient(gradients.borderLight.main, gradients.borderLight.state, gradients.borderLight.angle)}>
+                  <VuiInput type="number" placeholder="e.g., 50000" value={editPrincipal}
+                    onChange={(e) => { setEditPrincipal(e.target.value); clearEditCalculationError(); setEditLastEditedField("editPrincipal"); }}
+                    onFocus={() => setEditLastEditedField("editPrincipal")}
+                    required sx={{ fontSize: size.sm }} />
+                </GradientBorder>
+              </VuiBox>
+            </Grid>
+            {/* Interest Rate */}
+            <Grid item xs={12} sm={6}>
+              <VuiBox mb={2}>
+                <VuiBox mb={1} ml={0.5}><VuiTypography component="label" variant="button" color="white" fontWeight="medium">Annual Interest Rate (%)</VuiTypography></VuiBox>
+                <GradientBorder borderRadius={borderRadius.lg} padding="1px" backgroundImage={radialGradient(gradients.borderLight.main, gradients.borderLight.state, gradients.borderLight.angle)}>
+                  <VuiInput type="number" placeholder="e.g., 24.8" value={editInterestRate}
+                    onChange={(e) => { setEditInterestRate(e.target.value); clearEditCalculationError(); setEditLastEditedField("editInterestRate"); }}
+                    onFocus={() => setEditLastEditedField("editInterestRate")}
+                    required sx={{ fontSize: size.sm }} step="0.1" />
+                </GradientBorder>
+              </VuiBox>
+            </Grid>
+            {/* Term Value */}
+            <Grid item xs={8} sm={4}>
+              <VuiBox mb={2}>
+                <VuiBox mb={1} ml={0.5}><VuiTypography component="label" variant="button" color="white" fontWeight="medium">Loan Term Value</VuiTypography></VuiBox>
+                <GradientBorder borderRadius={borderRadius.lg} padding="1px" backgroundImage={radialGradient(gradients.borderLight.main, gradients.borderLight.state, gradients.borderLight.angle)}>
+                  <VuiInput type="number" placeholder="e.g., 100" value={editLoanTermValue}
+                    onChange={(e) => { setEditLoanTermValue(e.target.value); clearEditCalculationError(); setEditLastEditedField("editLoanTermValue"); }}
+                    onFocus={() => setEditLastEditedField("editLoanTermValue")}
+                    required sx={{ fontSize: size.sm }} />
+                </GradientBorder>
+              </VuiBox>
+            </Grid>
+            {/* Term Unit */}
+            <Grid item xs={4} sm={2}>
+              <VuiBox mb={2} sx={{ minWidth: 100 }}>
+                <VuiBox mb={1} ml={0.5}><VuiTypography component="label" variant="button" color="white" fontWeight="medium">Unit</VuiTypography></VuiBox>
+                <FormControl fullWidth variant="outlined" size="small">
+                  <Select value={editLoanTermUnit}
+                    onChange={(e) => { setEditLoanTermUnit(e.target.value); clearEditCalculationError(); setEditLastEditedField("editLoanTermUnit"); }}
+                    onFocus={() => setEditLastEditedField("editLoanTermUnit")}
+                    sx={{ /* styles from add form */ color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.05)', border: `1px solid ${grey[700]}`, borderRadius: borderRadius.md, fontSize: size.sm, '& .MuiSelect-icon': { color: 'white' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: grey[600] }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: info.main }, '& .MuiSelect-select': { padding: '10px 14px' } }}
+                    MenuProps={{ PaperProps: { sx: { backgroundColor: background.card, color: 'white', border: `1px solid ${grey[700]}` } } }}
+                  >
+                    <MenuItem value={"Days"} sx={{fontSize: size.sm}}>Days</MenuItem>
+                    <MenuItem value={"Weeks"} sx={{fontSize: size.sm}}>Weeks</MenuItem>
+                    <MenuItem value={"Months"} sx={{fontSize: size.sm}}>Months</MenuItem>
+                  </Select>
+                </FormControl>
+              </VuiBox>
+            </Grid>
+            {/* Frequency */}
+            <Grid item xs={12} sm={6}>
+              <VuiBox mb={2}>
+                <VuiBox mb={1} ml={0.5}><VuiTypography component="label" variant="button" color="white" fontWeight="medium">Frequency (Days)</VuiTypography></VuiBox>
+                <GradientBorder borderRadius={borderRadius.lg} padding="1px" backgroundImage={radialGradient(gradients.borderLight.main, gradients.borderLight.state, gradients.borderLight.angle)}>
+                  <VuiInput type="number" placeholder="e.g., 7" value={editInstallmentFrequencyDays}
+                    onChange={(e) => { setEditInstallmentFrequencyDays(e.target.value); clearEditCalculationError(); setEditLastEditedField("editInstallmentFrequencyDays"); }}
+                    onFocus={() => setEditLastEditedField("editInstallmentFrequencyDays")}
+                    required sx={{ fontSize: size.sm }} />
+                </GradientBorder>
+              </VuiBox>
+            </Grid>
+            {/* Calculated Total Due Display */}
+            <Grid item xs={12} sm={6}>
+              <VuiBox mb={2}>
+                <VuiTypography variant="button" color="text" fontWeight="medium" ml={0.5}>Calculated Total Due:</VuiTypography>
+                <VuiTypography variant="body2" color="white" fontWeight="bold" ml={0.5}>{formatCurrency(editCalculatedTotalDue)}</VuiTypography>
+                <VuiTypography variant="caption" color="text" ml={0.5}>({editNumberOfInstallments > 0 ? `${editNumberOfInstallments} installments` : 'N/A'})</VuiTypography>
+              </VuiBox>
+            </Grid>
+            {/* Manual Installment Amount */}
+            <Grid item xs={12} sm={6}>
+              <VuiBox mb={2}>
+                <VuiBox mb={1} ml={0.5}><VuiTypography component="label" variant="button" color="white" fontWeight="medium">Installment Amount (LKR)</VuiTypography></VuiBox>
+                <GradientBorder borderRadius={borderRadius.lg} padding="1px" backgroundImage={radialGradient(gradients.borderLight.main, gradients.borderLight.state, gradients.borderLight.angle)}>
+                  <VuiInput type="number" placeholder="Calculated or enter manually" value={editManualInstallmentAmount}
+                    onChange={(e) => { setEditManualInstallmentAmount(e.target.value); setEditLastEditedField("editManualInstallment"); }}
+                    onFocus={() => setEditLastEditedField("editManualInstallment")}
+                    required sx={{ fontSize: size.sm }} step="0.01" />
+                </GradientBorder>
+                <VuiTypography variant="caption" color="text" ml={0.5} mt={0.5}>(Calculated: {formatCurrency(editCalculatedInstallmentAmount)})</VuiTypography>
+              </VuiBox>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ borderTop: `1px solid ${grey[700]}`, padding: '16px 24px' }}>
+          <VuiButton onClick={handleCloseEditDialog} color="secondary" variant="outlined" sx={{ mr: 1 }}>
+            Cancel
+          </VuiButton>
+          <VuiButton type="submit" color="info" variant="contained" disabled={isEditing}>
+            {isEditing ? <CircularProgress size={20} color="inherit" /> : "Save Changes"}
+          </VuiButton>
+        </DialogActions>
+      </Dialog>
+      {/* --- End Edit Loan Dialog --- */}
+
 
       {/* Snackbar for Success Messages */}
       <Snackbar

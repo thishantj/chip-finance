@@ -1,5 +1,7 @@
 const Admin = require('../models/Admin');
 const jwt = require('jsonwebtoken'); // Import jsonwebtoken
+const bcrypt = require('bcrypt'); // Import bcrypt for hashing in update
+const saltRounds = 10; // Define salt rounds for hashing
 require('dotenv').config(); // Ensure dotenv is configured to access JWT_SECRET
 
 exports.addAdmin = async (req, res) => {
@@ -100,6 +102,69 @@ exports.checkAuth = (req, res) => {
   } else {
     res.status(401).json({ isAuthenticated: false });
   }
+};
+
+// Add this function to update an admin
+exports.updateAdmin = async (req, res) => {
+    const { id } = req.params; // ID of the admin to update
+    const { name, currentPassword, newPassword, confirmNewPassword } = req.body;
+    const loggedInAdminId = req.user.id; // ID of the admin making the request
+
+    // Basic validation
+    if (!name) {
+        return res.status(400).json({ message: 'Admin name is required.' });
+    }
+
+    // Password change validation
+    let hashedPasswordToUpdate = null;
+    if (newPassword || currentPassword) { // If user intends to change password
+        if (!currentPassword) {
+            return res.status(400).json({ message: 'Current password is required to set a new password.' });
+        }
+        if (!newPassword || !confirmNewPassword) {
+            return res.status(400).json({ message: 'New password and confirmation are required.' });
+        }
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({ message: 'New passwords do not match.' });
+        }
+        if (newPassword.length < 6) { // Example: Enforce minimum password length
+             return res.status(400).json({ message: 'New password must be at least 6 characters long.' });
+        }
+
+        try {
+            // Fetch the admin to verify current password
+            const adminToUpdate = await Admin.findById(id);
+            if (!adminToUpdate) {
+                return res.status(404).json({ message: 'Admin not found.' });
+            }
+
+            // Verify current password
+            const isMatch = await Admin.verifyPassword(currentPassword, adminToUpdate.password_hash);
+            if (!isMatch) {
+                return res.status(401).json({ message: 'Incorrect current password.' });
+            }
+
+            // Hash the new password
+            hashedPasswordToUpdate = await bcrypt.hash(newPassword, saltRounds);
+
+        } catch (error) {
+            console.error(`Error verifying password for admin ${id}:`, error);
+            return res.status(500).json({ message: 'Server error during password verification.' });
+        }
+    }
+
+    try {
+        // Update admin details (name and potentially password)
+        const affectedRows = await Admin.updateById(id, name, hashedPasswordToUpdate);
+        if (affectedRows === 0) {
+            // This case might be redundant if findById check passed, but good practice
+            return res.status(404).json({ message: 'Admin not found or no changes made.' });
+        }
+        res.status(200).json({ message: 'Admin updated successfully.' });
+    } catch (error) {
+        console.error(`Error updating admin ${id}:`, error);
+        res.status(500).json({ message: 'Server error updating admin.' });
+    }
 };
 
 // Add this function to get all admins

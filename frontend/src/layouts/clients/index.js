@@ -8,6 +8,11 @@ import Icon from "@mui/material/Icon"; // Import Icon
 import IconButton from "@mui/material/IconButton"; // Import IconButton
 import Snackbar from '@mui/material/Snackbar'; // Import Snackbar
 import Alert from '@mui/material/Alert'; // Import Alert for Snackbar content
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle'; // Add this import
+import CircularProgress from '@mui/material/CircularProgress'; // For loading state
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
@@ -27,6 +32,7 @@ import CoverLayout from "layouts/admin/components/CoverLayout";
 
 // Vision UI Dashboard assets
 import radialGradient from "assets/theme/functions/radialGradient";
+import linearGradient from "assets/theme/functions/linearGradient"; // Import linearGradient
 import palette from "assets/theme/base/colors";
 import borders from "assets/theme/base/borders";
 
@@ -54,6 +60,18 @@ function ClientManagement() { // Renamed component
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Add loading state
 
+  // --- Edit Dialog State ---
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null); // Client being edited
+  const [editName, setEditName] = useState('');
+  const [editNic, setEditNic] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editTelephone, setEditTelephone] = useState('');
+  const [editError, setEditError] = useState('');
+  const [isEditing, setIsEditing] = useState(false); // Loading state for edit
+  // --- End Edit Dialog State ---
+
+
   // Fetch client list
   const fetchClients = useCallback(async () => { // Renamed function
       setIsLoading(true); // Start loading
@@ -77,7 +95,8 @@ function ClientManagement() { // Renamed component
       } finally {
           setIsLoading(false); // Stop loading regardless of success or error
       }
-  }, [searchTerm]); // Add searchTerm dependency
+  // Removed searchTerm dependency to fetch all clients initially
+  }, []); // Empty dependency array means fetch only on mount or manual call
 
   useEffect(() => {
     fetchClients(); // Fetch clients on component mount
@@ -85,7 +104,7 @@ function ClientManagement() { // Renamed component
 
   // Handle Delete Action
   const handleDeleteClient = async (clientId) => { // Renamed parameter
-    if (window.confirm(`Are you sure you want to delete client with ID: ${clientId}?`)) { // Updated confirmation message
+    if (window.confirm(`Are you sure you want to delete client with ID: ${clientId}? This will also delete associated loans and payments.`)) { // Updated confirmation message
       try {
         setError('');
         setSuccessMessage('');
@@ -144,7 +163,7 @@ function ClientManagement() { // Renamed component
               `${process.env.REACT_APP_API_BASE_URL}/api/clients/add`,
               {
                   name: newClientName,
-                  nic: newClientNic, // Still send NIC, even if empty
+                  nic: newClientNic,
                   address: newClientAddress,
                   telephone: newClientTelephone
               },
@@ -167,16 +186,81 @@ function ClientManagement() { // Renamed component
       }
   };
 
-  // Handle Update Client Form Submission
-  const handleUpdateClient = async (event) => {
-    // ...existing code...
+  // --- Edit Dialog Handlers ---
+  const handleOpenEditDialog = (client) => {
+    setSelectedClient(client);
+    setEditName(client.name);
+    setEditNic(client.nic);
+    setEditAddress(client.address);
+    setEditTelephone(client.telephone);
+    setEditError(''); // Clear previous errors
+    setEditDialogOpen(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false);
+    setSelectedClient(null); // Clear selected client on close
+    setIsEditing(false); // Reset loading state
+  };
+
+  const handleEditClient = async (event) => {
+    event.preventDefault();
+    setEditError('');
+    setSuccessMessage('');
+    setIsEditing(true); // Set loading state
+
+    // Validation
+    if (!editName || !editNic || !editAddress || !editTelephone) {
+      setEditError("All fields (Name, NIC, Address, Telephone) are required.");
+      setIsEditing(false);
+      return;
+    }
+    if (editNic.length < 10) {
+      setEditError("Invalid NIC format.");
+      setIsEditing(false);
+      return;
+    }
+    if (editTelephone.length < 10) {
+      setEditError("Invalid telephone number format.");
+      setIsEditing(false);
+      return;
+    }
+
+    try {
       const token = getToken();
       if (!token) {
         setEditError("Authentication token not found.");
+        setIsEditing(false);
         return;
       }
-    // ...existing code...
+
+      const payload = {
+        name: editName,
+        nic: editNic,
+        address: editAddress,
+        telephone: editTelephone,
+      };
+
+      const response = await axios.put(
+        `${process.env.REACT_APP_API_BASE_URL}/api/clients/${selectedClient.client_id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSuccessMessage(response.data.message || 'Client updated successfully!');
+      setOpenSnackbar(true);
+      handleCloseEditDialog(); // Close dialog on success
+      fetchClients(); // Refresh the list
+
+    } catch (err) {
+      console.error("Error updating client:", err);
+      setEditError(err.response?.data?.message || "Failed to update client.");
+    } finally {
+        setIsEditing(false); // Reset loading state
+    }
   };
+  // --- End Edit Dialog Handlers ---
+
 
   // Filter clients based on search term (name, NIC, or telephone)
   const filteredClients = clients.filter(client =>
@@ -225,8 +309,8 @@ function ClientManagement() { // Renamed component
     ),
     action: (
       <VuiBox display="flex" justifyContent="center" alignItems="center">
-        {/* Edit button - functionality to be added */}
-        <IconButton size="small" color="info" sx={{ margin: '0 5px' }} onClick={() => alert(`Edit client ${client.client_id}`)} /* Add Edit Handler */ >
+        {/* Edit button - Updated onClick */}
+        <IconButton size="small" color="info" sx={{ margin: '0 5px' }} onClick={() => handleOpenEditDialog(client)} >
           <Icon>edit</Icon>
         </IconButton>
         {/* Delete button */}
@@ -411,7 +495,7 @@ function ClientManagement() { // Renamed component
               {/* Search Input */}
               <VuiBox sx={{ width: '250px' }}>
                  <VuiInput
-                    placeholder="Search by Name or NIC..." // Updated placeholder
+                    placeholder="Search by Name, NIC, or Phone..." // Updated placeholder
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     icon={{ component: "search", direction: "left" }}
@@ -424,7 +508,8 @@ function ClientManagement() { // Renamed component
             {/* Conditional Rendering for Table Content */}
             {isLoading ? (
                 <VuiBox p={3} textAlign="center">
-                    <VuiTypography variant="h6" color="text">Loading clients...</VuiTypography>
+                    <CircularProgress color="info" />
+                    <VuiTypography variant="h6" color="text" mt={2}>Loading clients...</VuiTypography>
                 </VuiBox>
             ) : error ? (
                 <VuiBox mb={2} p={2} mx={2} sx={{ backgroundColor: 'rgba(255, 0, 0, 0.1)', borderRadius: 'md' }}>
@@ -432,9 +517,11 @@ function ClientManagement() { // Renamed component
                         {error}
                     </VuiTypography>
                 </VuiBox>
-            ) : clients.length === 0 ? (
+            ) : filteredClients.length === 0 ? ( // Use filteredClients here
                 <VuiBox p={3} textAlign="center">
-                    <VuiTypography variant="h6" color="text">No clients found.</VuiTypography>
+                    <VuiTypography variant="h6" color="text">
+                        {searchTerm ? "No clients match your search." : "No clients found."}
+                    </VuiTypography>
                 </VuiBox>
             ) : (
                 <VuiBox
@@ -459,6 +546,196 @@ function ClientManagement() { // Renamed component
         </VuiBox>
         {/* Remove the second table if it was for projects */}
       </VuiBox>
+
+      {/* --- Edit Client Dialog --- */}
+      <Dialog
+        open={editDialogOpen}
+        onClose={handleCloseEditDialog}
+        PaperProps={{
+            component: 'form', // Make the Dialog Paper a form element
+            onSubmit: handleEditClient, // Handle submission here
+             sx: { // Style the dialog paper
+                backgroundColor: 'rgba(20, 20, 30, 0.95)', // Dark background
+                backdropFilter: 'blur(5px)',
+                border: `1px solid ${palette.grey[700]}`,
+                borderRadius: borders.borderRadius.lg,
+                color: 'white', // Default text color
+             }
+        }}
+      >
+        <DialogTitle sx={{ color: 'white', borderBottom: `1px solid ${palette.grey[700]}` }}>
+            Edit Client Details
+        </DialogTitle>
+        <DialogContent sx={{ paddingTop: '20px !important' }}> {/* Add padding top */}
+          {editError && (
+            <Alert severity="error" sx={{ mb: 2, width: '100%', '.MuiAlert-message': { color: 'white' } }} onClose={() => setEditError('')}>
+              {editError}
+            </Alert>
+          )}
+          {/* Display Client ID (Read-only) */}
+          <VuiBox mb={2}>
+            <VuiBox mb={1} ml={0.5}>
+              <VuiTypography component="label" variant="button" color="white" fontWeight="medium">
+                Client ID
+              </VuiTypography>
+            </VuiBox>
+            <GradientBorder
+              minWidth="100%"
+              padding="1px"
+              borderRadius={borders.borderRadius.lg}
+              backgroundImage={linearGradient(palette.gradients.primary.main, palette.gradients.primary.state, palette.gradients.primary.deg)}
+            >
+              <VuiInput
+                placeholder="Client ID"
+                value={selectedClient?.client_id || ''}
+                disabled
+                sx={({ typography: { size }, palette: { text, grey, white, background }, borders: { borderRadius } }) => ({
+                  fontSize: size.sm,
+                  color: grey[500],
+                  WebkitTextFillColor: grey[500],
+                  '.MuiInputBase-input.Mui-disabled': {
+                    WebkitTextFillColor: grey[500],
+                    color: grey[500],
+                    backgroundColor: 'transparent !important',
+                  },
+                  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": { border: "none" },
+                  "&:hover .MuiOutlinedInput-notchedOutline": { border: "none" },
+                  '& .MuiInputBase-root': {
+                     backgroundColor: 'rgba(15, 21, 53, 0.4) !important',
+                     backdropFilter: 'blur(2px)',
+                     borderRadius: borderRadius.lg,
+                     height: '40px',
+                     pl: '12px',
+                     pr: '12px',
+                  }
+                })}
+              />
+            </GradientBorder>
+          </VuiBox>
+
+          {/* Edit Name */}
+          <VuiBox mb={2}>
+            <VuiBox mb={1} ml={0.5}>
+              <VuiTypography component="label" variant="button" color="white" fontWeight="medium">
+                Name
+              </VuiTypography>
+            </VuiBox>
+            <GradientBorder
+              minWidth="100%"
+              borderRadius={borders.borderRadius.lg}
+              padding="1px"
+              backgroundImage={radialGradient(
+                palette.gradients.borderLight.main,
+                palette.gradients.borderLight.state,
+                palette.gradients.borderLight.angle
+              )}
+            >
+              <VuiInput
+                placeholder="Enter client's name..."
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
+                sx={({ typography: { size } }) => ({ fontSize: size.sm })}
+              />
+            </GradientBorder>
+          </VuiBox>
+
+          {/* Edit NIC */}
+          <VuiBox mb={2}>
+            <VuiBox mb={1} ml={0.5}>
+              <VuiTypography component="label" variant="button" color="white" fontWeight="medium">
+                NIC
+              </VuiTypography>
+            </VuiBox>
+            <GradientBorder
+              minWidth="100%"
+              borderRadius={borders.borderRadius.lg}
+              padding="1px"
+              backgroundImage={radialGradient(
+                palette.gradients.borderLight.main,
+                palette.gradients.borderLight.state,
+                palette.gradients.borderLight.angle
+              )}
+            >
+              <VuiInput
+                placeholder="Enter client's NIC..."
+                value={editNic}
+                onChange={(e) => setEditNic(e.target.value)}
+                required
+                sx={({ typography: { size } }) => ({ fontSize: size.sm })}
+              />
+            </GradientBorder>
+          </VuiBox>
+
+          {/* Edit Address */}
+          <VuiBox mb={2}>
+            <VuiBox mb={1} ml={0.5}>
+              <VuiTypography component="label" variant="button" color="white" fontWeight="medium">
+                Address
+              </VuiTypography>
+            </VuiBox>
+            <GradientBorder
+              minWidth="100%"
+              borderRadius={borders.borderRadius.lg}
+              padding="1px"
+              backgroundImage={radialGradient(
+                palette.gradients.borderLight.main,
+                palette.gradients.borderLight.state,
+                palette.gradients.borderLight.angle
+              )}
+            >
+              <VuiInput
+                placeholder="Enter client's address..."
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                required
+                sx={({ typography: { size } }) => ({ fontSize: size.sm })}
+              />
+            </GradientBorder>
+          </VuiBox>
+
+          {/* Edit Telephone */}
+          <VuiBox mb={2}>
+            <VuiBox mb={1} ml={0.5}>
+              <VuiTypography component="label" variant="button" color="white" fontWeight="medium">
+                Telephone
+              </VuiTypography>
+            </VuiBox>
+            <GradientBorder
+              minWidth="100%"
+              borderRadius={borders.borderRadius.lg}
+              padding="1px"
+              backgroundImage={radialGradient(
+                palette.gradients.borderLight.main,
+                palette.gradients.borderLight.state,
+                palette.gradients.borderLight.angle
+              )}
+            >
+              <VuiInput
+                type="tel"
+                placeholder="Enter client's telephone..."
+                value={editTelephone}
+                onChange={(e) => setEditTelephone(e.target.value)}
+                required
+                sx={({ typography: { size } }) => ({ fontSize: size.sm })}
+              />
+            </GradientBorder>
+          </VuiBox>
+
+        </DialogContent>
+        <DialogActions sx={{ borderTop: `1px solid ${palette.grey[700]}`, padding: '16px 24px' }}>
+          <VuiButton onClick={handleCloseEditDialog} color="secondary" variant="outlined" sx={{ mr: 1 }}>
+            Cancel
+          </VuiButton>
+          <VuiButton type="submit" color="info" variant="contained" disabled={isEditing}>
+            {isEditing ? <CircularProgress size={20} color="inherit" /> : "Save Changes"}
+          </VuiButton>
+        </DialogActions>
+      </Dialog>
+      {/* --- End Edit Client Dialog --- */}
+
+
       {/* Snackbar for Success Messages */}
       <Snackbar
         open={openSnackbar}

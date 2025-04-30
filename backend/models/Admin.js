@@ -37,6 +37,17 @@ exports.verifyPassword = async (inputPassword, hashedPassword) => {
   }
 };
 
+// Add this method to find an admin by ID (including hash for verification)
+exports.findById = async (adminId) => {
+  try {
+    const [rows] = await pool.query('SELECT admin_id, admin_name, username, password_hash, created_at FROM admins WHERE admin_id = ?', [adminId]);
+    return rows[0]; // Returns the admin object or undefined
+  } catch (error) {
+    console.error(`Error finding admin by ID ${adminId}:`, error);
+    throw error;
+  }
+};
+
 // Add this method to get all admins (excluding password hash)
 exports.getAll = async () => {
   try {
@@ -46,6 +57,28 @@ exports.getAll = async () => {
     console.error('Error getting all admins:', error);
     throw error;
   }
+};
+
+// Add this method to update an admin by ID
+exports.updateById = async (adminId, name, hashedPassword) => {
+    try {
+        let query = 'UPDATE admins SET admin_name = ?';
+        const params = [name];
+
+        if (hashedPassword) {
+            query += ', password_hash = ?';
+            params.push(hashedPassword);
+        }
+
+        query += ' WHERE admin_id = ?';
+        params.push(adminId);
+
+        const [result] = await pool.query(query, params);
+        return result.affectedRows; // Returns 1 if updated, 0 if not found
+    } catch (error) {
+        console.error(`Error updating admin with ID ${adminId}:`, error);
+        throw error;
+    }
 };
 
 // Add this method to delete an admin by ID

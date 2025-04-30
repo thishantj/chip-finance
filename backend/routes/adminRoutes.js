@@ -11,6 +11,7 @@ router.get('/check-auth', isAuthenticated, adminController.checkAuth); // Protec
 // Routes requiring authentication
 router.get('/', isAuthenticated, adminController.getAllAdmins); // GET all admins
 router.post('/add', isAuthenticated, adminController.addAdmin); // Protect this route
+router.put('/update/:id', isAuthenticated, adminController.updateAdmin); // Add PUT route for updates
 router.delete('/:id', isAuthenticated, adminController.deleteAdmin); // DELETE an admin
 router.post('/logout', isAuthenticated, adminController.logoutAdmin); // User must be logged in to log out
 

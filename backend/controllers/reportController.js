@@ -3,44 +3,54 @@ const Loan = require('../models/Loan');
 const Installment = require('../models/Installment');
 const PaymentHistory = require('../models/PaymentHistory'); // Corrected model name
 const PDFDocument = require('pdfkit'); // Import pdfkit
-const { formatDate } = require('../utils/dateFormatter'); // Assuming you have a date formatter utility
+const { formatDate, formatCurrency } = require('../utils/formatter'); // Assuming you have or create a currency formatter
+
+// --- Helper function for drawing lines (can be shared or redefined) ---
+const drawLine = (doc, y, color = '#cccccc', weight = 0.5) => {
+    const pageMargin = 50; // Assuming margin is 50
+    doc.moveTo(pageMargin, y)
+       .lineTo(doc.page.width - pageMargin, y)
+       .lineWidth(weight)
+       .strokeColor(color)
+       .stroke();
+    doc.strokeColor('black'); // Reset stroke color
+};
 
 // --- Helper Function (Using pdfkit) ---
 // This function now directly pipes the PDF to the response stream
 const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
     console.log(`[PDF Helper] Generating Client Summary PDF for: ${client.name}`); // Added log
-    const doc = new PDFDocument({ margin: 50 });
+    // Keep bufferPages for potential future multi-page reports
+    const doc = new PDFDocument({ margin: 50, bufferPages: true });
+    const pageMargin = 50;
+    const contentWidth = doc.page.width - pageMargin * 2;
 
     // --- Stream Error Handling ---
     let errorOccurred = false;
     let streamClosedPrematurely = false; // Flag for premature close
-
+    // ... (Keep existing stream error handlers: doc.on('error'), res.on('error'), res.on('close'), doc.on('finish')) ...
     doc.on('error', (err) => {
         console.error('[PDF Helper] PDFDocument stream error (Client Summary):', err);
         errorOccurred = true;
         if (!res.headersSent) {
-            res.status(500).json({ message: 'Error generating PDF document stream.' });
-        } else if (!res.writableEnded) { // Check if response is still writable before ending
-             res.end(); // Attempt to end response if possible
+            try { res.status(500).json({ message: 'Error generating PDF document stream.' }); } catch (e) { console.error("Error sending JSON error response:", e); }
+        } else if (!res.writableEnded) {
+             try { res.end(); } catch (e) { console.error("Error ending response stream:", e); }
         }
     });
     res.on('error', (err) => {
         console.error('[PDF Helper] Response stream error (Client Summary):', err);
         errorOccurred = true;
-        // Cannot send new status/headers if response stream errors out
-        // doc might become unwritable here
         if (doc.writable) {
-            doc.destroy(); // Destroy the source stream if response errors
+            try { doc.destroy(err); } catch (e) { console.error("Error destroying doc stream:", e); }
         }
     });
      res.on('close', () => {
-        // This event fires when the connection is terminated, regardless of whether 'finish' fired.
-        if (!res.writableEnded) { // Check if response finished normally
+        if (!res.writableEnded) {
              console.warn(`[PDF Helper] WARNING: Response stream closed prematurely (Client Summary ID: ${client.client_id}).`);
              streamClosedPrematurely = true;
-             // If the response closes, the doc stream might become unwritable or error out
              if (doc.writable) {
-                 doc.destroy(); // Destroy the source stream
+                 try { doc.destroy(); } catch (e) { console.error("Error destroying doc stream on close:", e); }
              }
         } else {
              console.log(`[PDF Helper] Response stream closed normally (Client Summary ID: ${client.client_id}).`);
@@ -48,17 +58,11 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
     });
     doc.on('finish', () => {
         console.log(`[PDF Helper] PDFDocument stream finished writing (Client Summary ID: ${client.client_id}).`);
-        // This indicates doc.end() completed successfully. res should close shortly after.
     });
     // --- End Stream Error Handling ---
 
-    // Set headers only if not already sent
-    if (!res.headersSent) {
-        res.setHeader('Content-Type', 'application/pdf');
-    } else {
-        console.warn(`[PDF Helper] Headers already sent before setting Content-Type (Client Summary ID: ${client.client_id}).`);
-        return; // Cannot proceed
-    }
+    // Set headers only if not already sent (handled in main controller function)
+    // if (!res.headersSent) { ... } // This is done in generateClientSummaryReport
 
     // Pipe the PDF document directly to the response stream
     console.log(`[PDF Helper] Piping PDF document to response (Client Summary ID: ${client.client_id})...`);
@@ -67,93 +71,215 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
     // --- PDF Content ---
     try {
         console.log(`[PDF Helper] Adding content to Client Summary PDF (Client ID: ${client.client_id})...`);
-        // Header
-        doc.fontSize(18).text(`Client Summary: ${client.name}`, { align: 'center' });
-        doc.fontSize(12).text(`Report Period: ${startDate} to ${endDate}`, { align: 'center' });
-        doc.moveDown(2);
 
-        // Client Details
-        doc.fontSize(14).text('Client Details', { underline: true });
-        doc.fontSize(10).text(`Client ID: ${client.client_id}`);
+        // 1. Company Header
+        doc.fontSize(20)
+           .font('Helvetica-Bold')
+           .text('SUN PIVOTAL INVESTMENTS.', { align: 'center' });
+        doc.moveDown(1.5); // Space after company header
+
+        // 2. Report Title and Period
+        doc.fontSize(16)
+           .font('Helvetica-Bold')
+           .text(`Client Summary: ${client.name}`, { align: 'center' });
+        doc.moveDown(0.5); // Space between title and period
+        doc.fontSize(11)
+           .font('Helvetica')
+           .text(`Report Period: ${formatDate(startDate)} to ${formatDate(endDate)}`, { align: 'center' });
+        doc.moveDown(2.5); // Space before content sections
+
+        // 3. Client Details Section
+        doc.fontSize(14).font('Helvetica-Bold').text('Client Details');
+        drawLine(doc, doc.y + 5); // Use helper function
+        doc.moveDown(1);
+        doc.font('Helvetica').fontSize(10); // Reset font for details
+        doc.text(`Client ID: ${client.client_id}`);
+        doc.moveDown(0.3); // Add space
         doc.text(`NIC: ${client.nic || 'N/A'}`);
+        doc.moveDown(0.3); // Add space
         doc.text(`Address: ${client.address || 'N/A'}`);
+        doc.moveDown(0.3); // Add space
         doc.text(`Telephone: ${client.telephone || 'N/A'}`);
-        doc.moveDown();
+        doc.moveDown(2); // Space after client details
 
-        // Fetch Summary Data (using the same logic as getClientSummary endpoint)
+        // 4. Fetch Summary Data (Robust fetching)
         console.log(`[PDF Helper] Fetching summary data for Client ID: ${client.client_id}...`);
-        const totalRemainingBalance = parseFloat(await Loan.getTotalRemainingBalanceByClient(client.client_id) || 0);
-        const totalDueActiveLoans = parseFloat(await Loan.getTotalDueForActiveLoansByClient(client.client_id) || 0);
-        const totalPaidInRange = parseFloat(await PaymentHistory.getTotalPaidByClientInRange(client.client_id, startDate, endDate) || 0);
+        let totalRemainingBalance = 0, totalDueActiveLoans = 0, totalPaidInRange = 0;
+        try {
+            totalRemainingBalance = parseFloat(await Loan.getTotalRemainingBalanceByClient(client.client_id) || 0);
+            totalDueActiveLoans = parseFloat(await Loan.getTotalDueForActiveLoansByClient(client.client_id) || 0);
+            totalPaidInRange = parseFloat(await PaymentHistory.getTotalPaidByClientInRange(client.client_id, startDate, endDate) || 0);
+        } catch (fetchError) {
+            console.error(`[PDF Helper] Error fetching summary numbers for Client ${client.client_id}:`, fetchError);
+            // Optionally add an error note to the PDF here if needed
+            doc.fillColor('red').text('Error: Could not fetch summary financial data.', { align: 'center' }).fillColor('black');
+        }
         console.log(`[PDF Helper] Fetched summary data for Client ID: ${client.client_id}.`);
 
-        // Overall Summary Section
-        doc.fontSize(14).text('Overall Summary', { underline: true });
-        doc.fontSize(10).text(`Total Remaining Balance (All Loans): LKR ${totalRemainingBalance.toFixed(2)}`);
-        doc.text(`Total Due (Active Loans): LKR ${totalDueActiveLoans.toFixed(2)}`);
-        doc.text(`Total Paid (Within ${startDate} to ${endDate}): LKR ${totalPaidInRange.toFixed(2)}`);
-        doc.moveDown();
+        // 5. Overall Summary Section
+        doc.fontSize(14).font('Helvetica-Bold').text('Overall Summary');
+        drawLine(doc, doc.y + 5);
+        doc.moveDown(1);
+        doc.font('Helvetica').fontSize(11); // Reset font
+        // Use left/right alignment
+        let summaryY = doc.y;
+        doc.text(`Total Remaining Balance (All Loans):`, pageMargin, summaryY, { width: contentWidth * 0.7, align: 'left' });
+        doc.text(formatCurrency(totalRemainingBalance), pageMargin, summaryY, { width: contentWidth, align: 'right' });
+        doc.moveDown(0.5);
+        summaryY = doc.y;
+        doc.text(`Total Due (Active Loans):`, pageMargin, summaryY, { width: contentWidth * 0.7, align: 'left' });
+        doc.text(formatCurrency(totalDueActiveLoans), pageMargin, summaryY, { width: contentWidth, align: 'right' });
+        doc.moveDown(0.5);
+        summaryY = doc.y;
+        doc.text(`Total Paid (Within Period):`, pageMargin, summaryY, { width: contentWidth * 0.7, align: 'left' });
+        doc.text(formatCurrency(totalPaidInRange), pageMargin, summaryY, { width: contentWidth, align: 'right' });
+        doc.moveDown(2); // Space after summary
 
-        // Fetch Loan Details (Example - you might want more details)
+        // 6. Fetch Loan Details
         console.log(`[PDF Helper] Fetching loan details for Client ID: ${client.client_id}...`);
-        const loans = await Loan.findByClientIdWithDetails(client.client_id);
+        let loans = [];
+        try {
+            loans = await Loan.findByClientIdWithDetails(client.client_id);
+        } catch (fetchError) {
+            console.error(`[PDF Helper] Error fetching loan details for Client ${client.client_id}:`, fetchError);
+            doc.fillColor('red').text('Error: Could not fetch loan details.', { align: 'center' }).fillColor('black');
+        }
         console.log(`[PDF Helper] Fetched ${loans?.length || 0} loans for Client ID: ${client.client_id}.`);
-        doc.fontSize(14).text('Loan Details', { underline: true });
+
+        // 7. Loan Details Section (Enhanced)
+        doc.fontSize(14).font('Helvetica-Bold').text('Loan Details');
+        drawLine(doc, doc.y + 5);
+        doc.moveDown(1);
+
         if (loans && loans.length > 0) {
-            loans.forEach(loan => {
+            for (const [index, loan] of loans.entries()) { // Use for...of for async/await inside loop if needed later
                 const loanAmount = parseFloat(loan.loan_amount || 0);
                 const totalAmountDue = parseFloat(loan.total_amount_due || 0);
                 const remainingBalance = parseFloat(loan.remaining_balance || 0);
+                const interestRate = parseFloat(loan.interest_rate || 0);
+                const termMonths = parseInt(loan.term_months || 0);
+                const installmentAmount = parseFloat(loan.installment_amount || 0);
 
-                doc.fontSize(12).text(`Loan ID: ${loan.loan_id} (${loan.status})`, { continued: true, underline: false });
-                doc.fontSize(10).text(` - Amount: LKR ${loanAmount.toFixed(2)}`, { continued: false, underline: false });
-                doc.text(`   Total Due: LKR ${totalAmountDue.toFixed(2)}`);
-                doc.text(`   Remaining: LKR ${remainingBalance.toFixed(2)}`);
+                doc.font('Helvetica-Bold').fontSize(11).text(`Loan ID: ${loan.loan_id} (${loan.status})`);
+                doc.moveDown(0.2); // Add space
+                doc.font('Helvetica').fontSize(10); // Details font
+                doc.text(`   Capital Amount: ${formatCurrency(loanAmount)}`);
+                doc.moveDown(0.2); // Add space
+                doc.text(`   Interest Rate: ${interestRate.toFixed(2)}%`);
+                doc.moveDown(0.2); // Add space
+                doc.text(`   Term: ${termMonths} months`);
+                doc.moveDown(0.2); // Add space
+                doc.text(`   Installment: ${formatCurrency(installmentAmount)}`);
+                doc.moveDown(0.2); // Add space
                 doc.text(`   Issued: ${formatDate(loan.created_at)}`);
-                doc.text(`   Next Payment: ${formatDate(loan.next_payment_date) || 'N/A'}`);
-                doc.moveDown(0.5);
-            });
-        } else {
-            doc.fontSize(10).text('No loans found for this client.');
-        }
-        doc.moveDown();
-        console.log(`[PDF Helper] Finished adding content to Client Summary PDF (Client ID: ${client.client_id}).`);
+                doc.moveDown(0.2); // Add space
+                doc.text(`   Next Payment Due: ${formatDate(loan.next_payment_date) || 'N/A'}`);
+                doc.moveDown(0.5); // Space before installments
 
-        // Placeholder for Payment History in Range (Add if needed)
-        // doc.fontSize(14).text('Payments in Range', { underline: true });
-        // Fetch and display payments...
+                // 8. Fetch and Filter Paid Installment Details
+                let paidInstallments = [];
+                let instError = null; // Initialize instError
+                try {
+                    const allInstallments = await Installment.findByLoanId(loan.loan_id);
+                    paidInstallments = allInstallments.filter(inst => inst.status === 'paid');
+                } catch (error) {
+                     instError = error; // Assign error to instError
+                     console.error(`[PDF Helper] Error fetching installments for Loan ${loan.loan_id}:`, instError);
+                     // Optionally log error in PDF if needed, but section will be skipped if paidInstallments is empty
+                }
+
+                // Only show Installments section if there are paid installments
+                if (paidInstallments.length > 0) {
+                    doc.font('Helvetica-Bold').fontSize(10).text(`   Paid Installments:`);
+                    doc.moveDown(0.3);
+                    doc.font('Helvetica').fontSize(9); // Smaller font for installment list
+                    paidInstallments.forEach(inst => {
+                        const dueDate = formatDate(inst.due_date);
+                        const paymentDate = formatDate(inst.payment_date) || 'N/A'; // Should always have a date if paid
+                        const amountDue = formatCurrency(inst.amount_due);
+                        const paidAmount = formatCurrency(inst.paid_amount); // Should match amount_due if fully paid
+                        // Indent installment details
+                        doc.text(`      Due: ${dueDate} | Paid: ${paidAmount} | Paid Date: ${paymentDate}`, { indent: 10 });
+                        doc.moveDown(0.15); // Smaller space between installments
+                    });
+                    doc.moveDown(0.5); // Space after installments list
+                } else if (instError) {
+                    // If there was an error fetching, mention it even if no paid ones were found
+                    doc.font('Helvetica').fillColor('red').fontSize(9).text('      Error fetching installment details.', { indent: 10 }).fillColor('black');
+                    doc.moveDown(0.5);
+                }
+                // If no paid installments and no error, the section is simply skipped.
+
+                // Loan Sub-Totals
+                doc.font('Helvetica-Bold').fontSize(10);
+                doc.text(`   Total Amount Due (Loan ${loan.loan_id}): ${formatCurrency(totalAmountDue)}`);
+                doc.moveDown(0.2);
+                doc.text(`   Remaining Balance (Loan ${loan.loan_id}): ${formatCurrency(remainingBalance)}`);
+                doc.moveDown(1); // Space after loan sub-totals
+
+                // Add a separator line between loans, but not after the last one
+                if (index < loans.length - 1) {
+                    drawLine(doc, doc.y + 5, '#eeeeee', 0.5); // Lighter line between loans
+                    doc.moveDown(1.5); // More space before next loan
+                }
+            } // End loop through loans
+        } else {
+            doc.font('Helvetica').fontSize(10).text('No loans found for this client.');
+            doc.moveDown(1);
+        }
+        console.log(`[PDF Helper] Finished adding content sections to Client Summary PDF (Client ID: ${client.client_id}).`);
+
+        // --- Footer (Add ONCE at the end, centered) ---
+        doc.moveDown(2); // Ensure space before footer
+        const generationDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        doc.fontSize(8)
+           .font('Helvetica')
+           .fillColor('black')
+           .text(
+              `Generated on: ${generationDate}`,
+              pageMargin, // X starts at margin
+              doc.y,      // Position below content
+              {
+                  align: 'center',
+                  width: contentWidth
+              }
+           );
+        console.log(`[PDF Helper] Added footer.`);
+
 
         console.log(`[PDF Helper] Calling doc.end() (Client Summary ID: ${client.client_id})...`);
         doc.end();
 
     } catch (dataError) {
-        console.error(`[PDF Helper] Error during Client Summary PDF generation (Client ID: ${client.client_id}): ${dataError}`);
+        console.error(`[PDF Helper] Error during Client Summary PDF content generation (Client ID: ${client.client_id}): ${dataError}`);
         errorOccurred = true; // Mark error occurred
-        if (!res.headersSent) {
-            // If headers not sent, send a JSON error
-             try {
-                res.status(500).json({ message: `Error generating client summary PDF: ${dataError.message}` });
-             } catch (e) { console.error("Error sending JSON error response:", e); }
-        } else if (doc.writable) {
-            // If headers sent and doc writable, try adding error to PDF
-            try {
+        // Keep existing error handling within catch block
+        try {
+            if (doc.writable && !res.headersSent) {
                 doc.fontSize(10).fillColor('red').text(`\n\nINTERNAL SERVER ERROR: Failed to generate complete report. Details: ${dataError.message}`);
                 doc.end();
-            } catch (e) { console.error("Error adding error text to PDF:", e); }
+            } else if (!res.headersSent) {
+                 try { res.status(500).json({ message: `Error generating client summary PDF content: ${dataError.message}` }); } catch (e) { console.error("Error sending JSON error response:", e); }
+            }
+        } catch (e) {
+            console.error("Error adding error text to PDF or sending JSON error:", e);
+            if (!res.writableEnded) {
+                try { res.end(); } catch (e2) { console.error("Error force ending response stream:", e2); }
+            }
         }
-        // If headers sent and doc not writable, we can't do much more than log
     }
 };
 
-// --- Basic PDF Helper for Net Profit ---
-// Make the function async for better practice with streams, although not strictly required by current content
+// --- Updated PDF Helper for Net Profit ---
 const generateNetProfitPdf = async (res, startDate, endDate) => {
     console.log(`[PDF Helper] Generating Net Profit PDF`);
-    const doc = new PDFDocument({ margin: 50 });
-    let errorOccurred = false; // Keep track of errors
-    let streamClosedPrematurely = false;
+    // bufferPages might not be strictly necessary now, but doesn't hurt
+    const doc = new PDFDocument({ margin: 50, bufferPages: true });
+    let errorOccurred = false;
+    const pageMargin = 50;
+    const contentWidth = doc.page.width - pageMargin * 2;
 
-    // --- Stream Event Handlers ---
+    // --- Stream Event Handlers (Keep existing handlers) ---
     doc.on('finish', () => {
         console.log('[PDF Helper] PDFDocument stream finished writing (Net Profit).');
         // res should close automatically after doc finishes piping.
@@ -193,80 +319,163 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
             console.log('[PDF Helper] Response stream closed normally (Net Profit).');
         }
     });
-    // --- End Stream Event Handlers ---
 
-    // Set Headers only if not already sent
-    if (!res.headersSent) {
-        res.setHeader('Content-Type', 'application/pdf');
-    } else {
-        console.warn('[PDF Helper] Headers already sent before setting Content-Type (Net Profit).');
-        // If headers are already sent, we probably can't recover. Log and return.
-        return;
-    }
+    // --- Set Headers ---
+    // Headers are set in the main controller function (generateNetProfitReport) before calling this helper.
 
-    // Pipe the document to the response
+    // --- Pipe the document to the response ---
     console.log('[PDF Helper] Piping PDF document to response (Net Profit)...');
     doc.pipe(res);
 
-    // Add Content and Finalize the PDF Document
+    // --- Add Content and Finalize the PDF Document ---
     try {
         console.log('[PDF Helper] Adding content to Net Profit PDF...');
-        // --- Add content ---
-        doc.fontSize(18).text('Net Profit Report', { align: 'center' });
-        doc.fontSize(12).text(`Report Period: ${startDate} to ${endDate}`, { align: 'center' });
-        doc.moveDown(2);
 
-        // Placeholder content - Replace with actual data fetching and calculation
-        doc.fontSize(14).text('Summary (Placeholder)', { underline: true });
-        doc.fontSize(10).text('Total Income (Example): LKR 50000.00');
-        doc.text('Total Expenses (Example): LKR 20000.00');
+        // --- Fetch Data ---
+        const totalIncome = parseFloat(await PaymentHistory.getTotalPaidInRange(startDate, endDate) || 0);
+        // Placeholder for expenses - replace with actual fetching when implemented
+        const totalExpenses = 0.00; // Example
+        const netProfit = totalIncome - totalExpenses;
+
+        // --- PDF Content ---
+
+        // 1. Company Header (Bigger and Bolder)
+        doc.fontSize(20) // Increased font size
+           .font('Helvetica-Bold')
+           .text('SUN PIVOTAL INVESTMENTS.', { align: 'center' });
+        doc.moveDown(2); // Increased space after header
+
+        // 2. Report Title and Period
+        doc.fontSize(16) // Slightly larger title
+           .font('Helvetica-Bold')
+           .text('Net Profit Report', { align: 'center' });
+        doc.moveDown(0.5); // Add a small space between title and period
+        doc.fontSize(11) // Slightly larger period text
+           .font('Helvetica')
+           .text(`Report Period: ${formatDate(startDate)} to ${formatDate(endDate)}`, { align: 'center' });
+        doc.moveDown(2.5); // More space before content
+
+        // --- Helper function for drawing lines ---
+        const drawLine = (y) => {
+            doc.moveTo(pageMargin, y)
+               .lineTo(doc.page.width - pageMargin, y)
+               .lineWidth(0.5) // Thinner line
+               .strokeColor('#cccccc') // Lighter color
+               .stroke();
+            doc.strokeColor('black'); // Reset stroke color
+        };
+
+        // 3. Detailed Breakdown (Income Statement Style)
+
+        // Income Section
+        doc.fontSize(14).font('Helvetica-Bold').text('Income', { underline: false }); // Larger section header, no underline
+        drawLine(doc.y + 5); // Line below header
+        doc.moveDown(1);
+        doc.font('Helvetica').fontSize(11); // Standard content font size
+
+        // Income Item(s) - Left align label, Right align amount
+        const incomeStartY = doc.y;
+        doc.text('Total Payments Received:', pageMargin, incomeStartY, { width: contentWidth * 0.7, continued: false, align: 'left' });
+        doc.text(formatCurrency(totalIncome), pageMargin, incomeStartY, { width: contentWidth, continued: false, align: 'right' });
+        doc.moveDown(1.5); // Space after income items
+
+        // Total Income Line (Bolder)
+        drawLine(doc.y); // Line above total
         doc.moveDown(0.5);
-        doc.fontSize(12).text('Net Profit (Example): LKR 30000.00');
-        doc.moveDown(2);
-        doc.fontSize(8).text('[Detailed net profit calculation data would go here]', { align: 'center' });
-        console.log('[PDF Helper] Finished adding content to Net Profit PDF.');
+        const totalIncomeY = doc.y;
+        doc.font('Helvetica-Bold').fontSize(11);
+        doc.text('Total Income:', pageMargin, totalIncomeY, { width: contentWidth * 0.7, continued: false, align: 'left' });
+        doc.text(formatCurrency(totalIncome), pageMargin, totalIncomeY, { width: contentWidth, continued: false, align: 'right' });
+        doc.font('Helvetica').fontSize(11); // Reset font
+        doc.moveDown(2); // More space after total income
+
+        // Expenses Section (Placeholder)
+        doc.fontSize(14).font('Helvetica-Bold').text('Expenses', { underline: false });
+        drawLine(doc.y + 5); // Line below header
+        doc.moveDown(1);
+        doc.font('Helvetica').fontSize(11);
+
+        // Expense Item(s) - Placeholder
+        const expenseStartY = doc.y;
+        doc.text('Operational Costs:', pageMargin, expenseStartY, { width: contentWidth * 0.7, continued: false, align: 'left' });
+        doc.text(formatCurrency(0.00), pageMargin, expenseStartY, { width: contentWidth, continued: false, align: 'right' });
+        doc.moveDown(0.5);
+        const expenseNextY = doc.y;
+        doc.text('Loan Write-offs:', pageMargin, expenseNextY, { width: contentWidth * 0.7, continued: false, align: 'left' });
+        doc.text(formatCurrency(0.00), pageMargin, expenseNextY, { width: contentWidth, continued: false, align: 'right' });
+        // Add more expense lines as needed...
+        doc.moveDown(1.5); // Space after expense items
+
+        // Total Expenses Line (Bolder)
+        drawLine(doc.y); // Line above total
+        doc.moveDown(0.5);
+        const totalExpenseY = doc.y;
+        doc.font('Helvetica-Bold').fontSize(11);
+        doc.text('Total Expenses:', pageMargin, totalExpenseY, { width: contentWidth * 0.7, continued: false, align: 'left' });
+        doc.text(formatCurrency(totalExpenses), pageMargin, totalExpenseY, { width: contentWidth, continued: false, align: 'right' });
+        doc.font('Helvetica').fontSize(11); // Reset font
+        doc.moveDown(2); // More space after total expenses
+
+        // --- Final Net Profit/Loss ---
+        drawLine(doc.y); // Line above final calculation
+        doc.moveDown(0.8);
+
+        // Final Calculation (Bolder, Larger)
+        doc.fontSize(13).font('Helvetica-Bold'); // Larger font for final result
+        const profitLabel = netProfit >= 0 ? 'Net Profit:' : 'Net Loss:';
+        const finalY = doc.y;
+        doc.text(profitLabel, pageMargin, finalY, { width: contentWidth * 0.7, continued: false, align: 'left' });
+        doc.text(formatCurrency(netProfit), pageMargin, finalY, { width: contentWidth, continued: false, align: 'right' });
+        doc.moveDown(0.5);
+        drawLine(doc.y); // Double line under final result
+        doc.moveDown(0.1);
+        drawLine(doc.y);
+        doc.moveDown(2); // Add space after the net profit section
+
+        // --- Footer (Add ONCE at the end of the document content, centered) ---
+        const generationDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        // Add footer text centered below the main content on the *current* (last) page
+        doc.fontSize(8)
+           .font('Helvetica')
+           .fillColor('black')
+           .text(
+              `Generated on: ${generationDate}`,
+              pageMargin, // X position starts at left margin
+              doc.y, // Use current Y position after the moveDown
+              {
+                  align: 'center', // Align text to the center
+                  width: contentWidth // Use the calculated content width
+              }
+           );
+
+        console.log('[PDF Helper] Finished adding content and footer to Net Profit PDF.');
 
         // --- Finalize the PDF ---
-        // Call end() inside the try block after successfully adding content.
+        // End the document stream *after* adding all content and the single footer
         console.log('[PDF Helper] Calling doc.end() (Net Profit)...');
         doc.end();
 
     } catch (contentError) {
         console.error(`[PDF Helper] Error adding content or ending Net Profit PDF: ${contentError}`);
         errorOccurred = true;
-        // If an error occurs while adding content, try to add error text to the PDF
-        // ONLY if the doc stream is still writable. This might happen if contentError is thrown
-        // before doc.end() is called but after piping started.
+        // ... (keep existing error handling within the catch block) ...
         try {
-            if (doc.writable) {
-                console.warn('[PDF Helper] Attempting to add error message to PDF...');
-                doc.fontSize(10).fillColor('red').text(`\n\nINTERNAL SERVER ERROR: Failed to generate report content. Details: ${contentError.message}`);
-                doc.end(); // Try to end the doc after adding error message
-            } else {
-                 console.warn('[PDF Helper] Doc stream not writable when trying to add content error message.');
-                 // If doc is not writable, attempt to end the response if possible and not already ended
-                 if (!res.writableEnded) {
-                     console.warn('[PDF Helper] Attempting to end response stream after content error.');
-                     res.end();
-                 }
+            if (doc.writable && !res.headersSent) { // Check headersSent as well
+                doc.fontSize(10).fillColor('red').text(`\n\nINTERNAL SERVER ERROR: Failed to generate complete report. Details: ${contentError.message}`);
+                doc.end(); // Try to end gracefully with error message
+            } else if (!res.headersSent) {
+                 // If doc is not writable but headers not sent, send JSON error
+                 try { res.status(500).json({ message: `Error generating PDF content: ${contentError.message}` }); } catch (e) { console.error("Error sending JSON error response:", e); }
             }
         } catch (e) {
-            console.error('[PDF Helper] Error while trying to add error message to PDF or end response:', e);
-             // Final attempt to end response if something went wrong and it's not ended
-             if (!res.writableEnded) {
-                 res.end();
-             }
-        }
-
-        // If headers haven't been sent yet (very unlikely here), send JSON error
-        if (!res.headersSent) {
-             try { res.status(500).json({ message: `Error generating PDF content: ${contentError.message}` }); } catch (e) { console.error("Error sending JSON error response:", e); }
+            console.error("Error adding error text to PDF or sending JSON error:", e);
+            if (!res.writableEnded) {
+                res.end(); // Force end response if error handling fails
+            }
         }
     }
-    // Removed the finally block that was causing issues by checking doc.writable prematurely.
-    // Stream events ('finish', 'error', 'close') will handle the final state.
 };
-
 
 // --- Client Summary Report (PDF Generation) ---
 exports.generateClientSummaryReport = async (req, res) => {
@@ -330,8 +539,9 @@ exports.generateNetProfitReport = async (req, res) => {
         }
 
         // Set Content-Disposition
-        const filename = `net_profit_report_${startDate}_to_${endDate}.pdf`;
+        const filename = `Net_Profit_Report_${startDate}_to_${endDate}.pdf`; // Changed filename format slightly
          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'application/pdf'); // Ensure Content-Type is set
             if (action === 'download') {
                 res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
             } else {
@@ -342,8 +552,8 @@ exports.generateNetProfitReport = async (req, res) => {
              return;
         }
 
-        // Call the helper function - no await needed here, it handles the response stream internally.
-        generateNetProfitPdf(res, startDate, endDate);
+        // Call the helper function - it handles the response stream internally.
+        await generateNetProfitPdf(res, startDate, endDate); // Added await, although helper manages stream
 
     } catch (error) {
          // This catch block handles errors from the initial checks (date validation)

@@ -46,7 +46,7 @@ const formatDateForAPI = (date) => {
 };
 
 function ClientSummaryReportCard() {
-  const { grey, info, background, white, inputColors, text } = colors; // Removed gradients
+  const { grey, info, background, white, black, inputColors, text } = colors; // Removed gradients
   const { size } = typography;
   const { borderRadius, borderWidth } = borders;
 
@@ -342,17 +342,16 @@ function ClientSummaryReportCard() {
         backgroundColor: inputColors.backgroundColor,
         borderRadius: borderRadius.md,
         fontSize: size.sm,
-        color: white.main,
+        color: white.main, // Keep root color white (for icons etc.)
         height: pxToRem(40), // Match VuiInput small height
-        // Adjust paddingRight specifically for Autocomplete later if needed
         padding: `${pxToRem(8)} ${pxToRem(12)}`,
         '& .MuiOutlinedInput-input': {
-            color: white.main,
+            color: grey[500],
             height: '100%',
             fontSize: size.sm,
-            // boxSizing: 'border-box', // May not be needed if height is on root
+            padding: '0 !important', // Remove default padding if needed, handled by root padding
             '&::placeholder': {
-                color: text.secondary, // Use theme's secondary text color for placeholder
+                color: text.secondary, // Use theme's secondary text color for placeholder (grey[500])
                 opacity: 1, // Ensure placeholder is not transparent
             },
         },
@@ -380,6 +379,7 @@ function ClientSummaryReportCard() {
              // Ensure input text doesn't overlap icons
              '& .MuiOutlinedInput-input': {
                  paddingRight: `${pxToRem(40)} !important`, // Add padding to input itself if adornments overlap
+                 color: grey[500], // Re-apply darker grey color for specificity
              }
         }
     },
@@ -395,11 +395,7 @@ function ClientSummaryReportCard() {
             color: info.main,
         },
     },
-     // Ensure placeholder color matches
-      '& .MuiOutlinedInput-input::placeholder': {
-          color: text.secondary, // Or white.main depending on desired look
-          opacity: 1,
-      },
+     // Ensure placeholder color matches (already covered in .MuiOutlinedInput-input::placeholder)
   };
 
 
@@ -469,6 +465,7 @@ function ClientSummaryReportCard() {
                   if (reason === 'input') {
                     setSelectedClient(null); // Clear selection when user types
                     setClientSummaryData(null);
+                    setSummaryError(""); // Clear summary error on new input
                     debouncedSearch(newInputValue); // Trigger debounced search
                   } else if (reason === 'clear') {
                     handleSelectClient(null); // Clear selection and summary
@@ -506,7 +503,7 @@ function ClientSummaryReportCard() {
                         </React.Fragment>
                       ),
                     }}
-                    sx={inputFieldStyles} // Use common styles
+                    sx={inputFieldStyles} // Use common styles (styles updated above)
                   />
                 )}
                 PaperComponent={(props) => (
@@ -514,10 +511,8 @@ function ClientSummaryReportCard() {
                         {...props}
                         sx={{
                             bgcolor: background.card,
-                            border: `${borderWidth[1]} solid ${grey[700]}`,
-                            borderRadius: borderRadius.md,
                             boxShadow: 3,
-                            color: white.main,
+                            color: white.main, // Ensure text color in dropdown paper is white
                             marginTop: pxToRem(4),
                         }}
                     />
@@ -526,8 +521,8 @@ function ClientSummaryReportCard() {
                   // Important: Ensure props are spread onto the ListItem for Autocomplete functionality
                   <ListItem {...props} key={option.client_id} sx={{ "&:hover": { backgroundColor: info.main }, paddingTop: pxToRem(4.8), paddingBottom: pxToRem(4.8) }}>
                     <ListItemText
-                      primaryTypographyProps={{ color: "white", fontSize: size.sm }}
-                      secondaryTypographyProps={{ color: grey[500], fontSize: size.xs }}
+                      primaryTypographyProps={{ color: "white", fontSize: size.sm }} // Ensure primary text is white
+                      secondaryTypographyProps={{ color: grey[500], fontSize: size.xs }} // Secondary text is grey
                       primary={option.name}
                       secondary={`NIC: ${option.nic || 'N/A'} / Tel: ${option.telephone || 'N/A'}`}
                     />

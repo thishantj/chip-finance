@@ -193,18 +193,33 @@ exports.getClientSummary = async (req, res) => {
 
     try {
         // 1. Check if client exists
+        console.log(`[Controller] Checking existence for Client ID: ${clientId}`);
         const client = await Client.findById(clientId);
         if (!client) {
             console.log(`[Controller] Client not found for ID: ${clientId}`); // Added log
             return res.status(404).json({ message: 'Client not found.' });
         }
+        console.log(`[Controller] Client found: ${client.name}`);
 
         // 2. Fetch necessary data using Model methods
         console.log(`[Controller] Fetching summary data for Client ID: ${clientId}`); // Updated log
-        const totalRemainingBalance = await Loan.getTotalRemainingBalanceByClient(clientId);
-        const totalDueActiveLoans = await Loan.getTotalDueForActiveLoansByClient(clientId);
+
+        console.log(`[Controller] Fetching total remaining balance...`);
+        const totalRemainingBalanceResult = await Loan.getTotalRemainingBalanceByClient(clientId);
+        console.log(`[Controller] Raw total remaining balance:`, totalRemainingBalanceResult);
+        const totalRemainingBalance = parseFloat(totalRemainingBalanceResult || 0);
+
+        console.log(`[Controller] Fetching total due for active loans...`);
+        const totalDueActiveLoansResult = await Loan.getTotalDueForActiveLoansByClient(clientId);
+        console.log(`[Controller] Raw total due active loans:`, totalDueActiveLoansResult);
+        const totalDueActiveLoans = parseFloat(totalDueActiveLoansResult || 0);
+
+        console.log(`[Controller] Fetching total paid in range...`);
         // Corrected model name from Payment to PaymentHistory
-        const totalPaidInRange = await PaymentHistory.getTotalPaidByClientInRange(clientId, startDate, endDate);
+        const totalPaidInRangeResult = await PaymentHistory.getTotalPaidByClientInRange(clientId, startDate, endDate);
+        console.log(`[Controller] Raw total paid in range:`, totalPaidInRangeResult);
+        const totalPaidInRange = parseFloat(totalPaidInRangeResult || 0);
+        console.log(`[Controller] Parsed Summary Data: Balance=${totalRemainingBalance}, Due=${totalDueActiveLoans}, Paid=${totalPaidInRange}`);
 
 
         // 3. Construct the summary object
@@ -227,6 +242,7 @@ exports.getClientSummary = async (req, res) => {
         res.status(200).json(summaryData);
 
     } catch (error) {
+        // Log the specific error that occurred during data fetching or processing
         console.error(`[Controller] Error fetching client summary data for client ${clientId}:`, error); // Added log
         res.status(500).json({ message: 'Server error fetching client summary data.' });
     }

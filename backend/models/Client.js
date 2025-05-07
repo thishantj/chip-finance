@@ -39,15 +39,11 @@ const Client = {
     return result.affectedRows;
   },
 
-  async delete(id) {
-    // Add check for existing loans before deleting?
-    // const checkLoansSql = 'SELECT loan_id FROM loans WHERE client_id = ? LIMIT 1';
-    // const [loans] = await pool.query(checkLoansSql, [id]);
-    // if (loans.length > 0) {
-    //   throw new Error('Cannot delete client with existing loans.');
-    // }
+  // Updated delete method to accept a connection for transactions
+  async delete(id, connection = pool) {
+    
     const sql = 'DELETE FROM clients WHERE client_id = ?';
-    const [result] = await pool.query(sql, [id]);
+    const [result] = await connection.query(sql, [id]); // Use the passed connection
     return result.affectedRows;
   },
 

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-import { useTheme } from "@mui/material/styles"; // Import useTheme
-import { getToken } from "utils/auth"; // Updated import path
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import axiosInstance from "api/axiosInstance"; // Import axiosInstance
+import { getToken } from "utils/auth";
 
 // @mui material components
 import Card from "@mui/material/Card";
@@ -39,9 +38,6 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
 // Vision UI Dashboard assets
 import radialGradient from "assets/theme/functions/radialGradient";
-import linearGradient from "assets/theme/functions/linearGradient"; // Import linearGradient
-import palette from "assets/theme/base/colors";
-import borders from "assets/theme/base/borders";
 
 // Function to format date (assuming it's needed for the table)
 const formatDate = (dateString) => {
@@ -109,7 +105,7 @@ function Loans() {
 
   const theme = useTheme(); // Get theme object
   const { palette, borders, typography } = theme; // Destructure theme properties
-  const { gradients, info, grey, background, primary, secondary, error: errorColor, success: successColor, warning: warningColor, text } = palette; // Destructure from palette
+  const { gradients, info, grey, background, error: errorColor, success: successColor, warning: warningColor, text } = palette; // Destructure from palette
   const { borderRadius } = borders; // Destructure from borders
   const { size } = typography; // Destructure from typography
 
@@ -177,12 +173,12 @@ function Loans() {
         setIsLoadingLoans(false);
         return;
       }
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/loans`, {
+      const response = await axiosInstance.get(`/api/loans`, { // Changed to axiosInstance
         headers: { Authorization: `Bearer ${token}` },
       });
       setLoans(response.data);
     } catch (err) {
-      console.error("Error fetching loans:", err);
+      // console.error("Error fetching loans:", err); // Keep for debugging if necessary, or remove
       setError(err.response?.data?.message || "Failed to fetch loans.");
     } finally {
       setIsLoadingLoans(false);
@@ -285,9 +281,6 @@ function Loans() {
                   // Optionally reset interest rate display or leave it
                   // setInterestRate("N/A");
               }
-          } else {
-              // Handle cases where other inputs are invalid during manual installment edit
-              // Maybe show a different error or just don't update the rate
           }
       }
   }, [manualInstallmentAmount, principal, calculatedTermInDays, installmentFrequencyDays, lastEditedField]);
@@ -296,30 +289,36 @@ function Loans() {
   const handleClientSearch = async (event) => {
     const searchTerm = event.target.value;
     setClientSearchTerm(searchTerm);
-    setSelectedClient(null); // Clear selected client when searching
-    setSearchedClients([]); // Clear previous results immediately
-    if (searchTerm.trim().length < 2) {
+    setSearchError(""); // Clear previous search error
+
+    if (searchTerm.length < 2) {
+      setSearchedClients([]);
       setIsSearchingClients(false);
+      if (searchTerm.length > 0) {
+        setSearchError("Please enter at least 2 characters to search.");
+      }
       return;
     }
 
     setIsSearchingClients(true);
-    setAddError(""); // Clear previous add errors
-
     try {
       const token = getToken();
       if (!token) {
-        setAddError("Authentication token not found.");
+        setSearchError("Authentication error.");
         setIsSearchingClients(false);
         return;
       }
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/clients/search?q=${searchTerm.trim()}`, {
+      // Assuming endpoint /api/clients/search?term=...
+      const response = await axiosInstance.get(`/api/clients/search?term=${searchTerm}`, { // Changed to axiosInstance
         headers: { Authorization: `Bearer ${token}` },
       });
       setSearchedClients(response.data);
+      if (response.data.length === 0) {
+        setSearchError("No clients found matching your search.");
+      }
     } catch (err) {
-      console.error("Error searching clients:", err);
-      setAddError(err.response?.data?.message || "Failed to search clients.");
+      // console.error("Error searching clients:", err); // Keep for debugging if necessary
+      setSearchError(err.response?.data?.message || "Failed to search clients.");
       setSearchedClients([]);
     } finally {
       setIsSearchingClients(false);
@@ -328,10 +327,11 @@ function Loans() {
 
   const handleSelectClient = (client) => {
     setSelectedClient(client);
-    // Keep search term concise
-    setClientSearchTerm(`${client.name} (${client.nic})`);
-    setSearchedClients([]); // Hide search results
+    setClientSearchTerm(client ? `${client.name} (NIC: ${client.nic})` : "");
+    setSearchedClients([]); // Clear search results dropdown
+    setAddError(""); // Clear any previous form errors when client changes
   };
+
 
   const handleAddLoan = async (event) => {
     event.preventDefault();
@@ -339,19 +339,13 @@ function Loans() {
     setSuccessMessage("");
 
     if (!selectedClient) {
-      setAddError("Please select a client first.");
+      setAddError("Please select a client for the loan.");
       return;
     }
 
-    const termDaysNum = calculatedTermInDays; // Use calculated term in days
-
-    // Validation using calculatedTermInDays
-    if (!principal || termDaysNum <= 0 || !installmentFrequencyDays || !interestRate || !manualInstallmentAmount) {
-      setAddError("Principal, Term, Frequency, Interest Rate, and Installment Amount are required.");
-      return;
-    }
-
+    // --- Input Validation ---
     const principalNum = parseFloat(principal);
+    const termDaysNum = calculatedTermInDays; // Use the calculated term in days
     const freqNum = parseInt(installmentFrequencyDays, 10);
     const rateNum = parseFloat(interestRate);
     const installmentNum = parseFloat(manualInstallmentAmount);
@@ -376,6 +370,7 @@ function Loans() {
     const finalInstallment = parseFloat(manualInstallmentAmount);
     const finalTermDays = calculatedTermInDays;
     const finalFreq = parseInt(installmentFrequencyDays, 10);
+
     if (!isNaN(finalPrincipal) && finalPrincipal > 0 &&
         !isNaN(finalInstallment) && finalInstallment > 0 &&
         finalTermDays > 0 && !isNaN(finalFreq) && finalFreq > 0 && finalTermDays >= finalFreq) {
@@ -400,7 +395,7 @@ function Loans() {
         return;
       }
 
-      const loanData = {
+      const payload = {
         client_id: selectedClient.client_id,
         principal_amount: principalNum,
         interest_rate: rateNum,
@@ -409,31 +404,31 @@ function Loans() {
         installment_amount: installmentNum, // Send the potentially manually adjusted installment amount
       };
 
-      // Correct the endpoint URL from '/api/loans/add' to '/api/loans/'
-      const response = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/loans/`, loanData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // API call to add loan
+      const response = await axiosInstance.post( // Changed to axiosInstance
+        `${process.env.REACT_APP_API_BASE_URL}/api/loans`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      // Clear form fields and selection
-      setSelectedClient(null);
-      setClientSearchTerm("");
+      // Reset form fields
       setPrincipal("");
-      setLoanTermValue(""); // Clear term value
-      setLoanTermUnit("Days"); // Reset term unit
-      setInterestRate("24.8");
+      setInterestRate("");
+      setLoanTermValue("");
+      setLoanTermUnit("Months");
       setInstallmentFrequencyDays("");
       setManualInstallmentAmount("");
       setCalculatedTotalDue(0);
       setCalculatedInstallmentAmount(0);
       setNumberOfInstallments(0);
       setCalculatedTermInDays(0); // Reset calculated days
+      setSelectedClient(null); // Clear selected client
+      setClientSearchTerm(""); // Clear client search term
 
       fetchLoans(); // Refresh the loan list
       setSuccessMessage(response.data.message || "Loan added successfully!");
       setOpenSnackbar(true); // Show success Snackbar
     } catch (err) {
-      console.error("Error adding loan:", err);
-      // Display the actual error message from the backend if available
       setAddError(err.response?.data?.message || err.message || "Failed to add loan.");
     }
   };
@@ -443,8 +438,6 @@ function Loans() {
     setSelectedLoan(loan);
     setEditPrincipal(loan.principal_amount.toString());
     setEditInterestRate(loan.interest_rate.toString());
-    // Need to reverse calculate term value/unit from loan_term_days
-    // For simplicity, default to days for now, or implement logic if needed
     setEditLoanTermValue(loan.loan_term_days.toString());
     setEditLoanTermUnit("Days"); // Default or calculate based on common factors (7, 30)
     setEditInstallmentFrequencyDays(loan.installment_frequency_days.toString());
@@ -467,18 +460,17 @@ function Loans() {
     setSelectedLoan(null); // Clear selected loan on close
     setIsEditing(false); // Reset loading state
     setEditError(''); // Clear errors
-    // Reset edit form state if needed
   };
 
-  const handleUpdateLoan = async (event) => {
+  const handleEditLoan = async (event) => {
     event.preventDefault();
     setEditError('');
     setSuccessMessage('');
-    setIsEditing(true); // Set loading state
+    setIsEditing(true);
 
-    // --- Validation (similar to Add Loan, using edit state) ---
-    const termDaysNum = editCalculatedTermInDays;
+    // --- Input Validation (Edit Dialog) ---
     const principalNum = parseFloat(editPrincipal);
+    const termDaysNum = editCalculatedTermInDays; // Use calculated term in days
     const freqNum = parseInt(editInstallmentFrequencyDays, 10);
     const rateNum = parseFloat(editInterestRate);
     const installmentNum = parseFloat(editManualInstallmentAmount);
@@ -529,7 +521,7 @@ function Loans() {
       };
 
       // Assume PUT /api/loans/:id endpoint exists
-      const response = await axios.put(
+      const response = await axiosInstance.put( // Changed to axiosInstance
         `${process.env.REACT_APP_API_BASE_URL}/api/loans/${selectedLoan.loan_id}`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -541,7 +533,7 @@ function Loans() {
       fetchLoans(); // Refresh the list
 
     } catch (err) {
-      console.error("Error updating loan:", err);
+      // console.error("Error updating loan:", err); // Keep for debugging if necessary
       setEditError(err.response?.data?.message || "Failed to update loan.");
     } finally {
         setIsEditing(false); // Reset loading state
@@ -559,14 +551,14 @@ function Loans() {
             setError("Authentication token not found.");
             return;
         }
-        await axios.delete(`${process.env.REACT_APP_API_BASE_URL}/api/loans/${loanId}`, {
+        await axiosInstance.delete(`${process.env.REACT_APP_API_BASE_URL}/api/loans/${loanId}`, { // Changed to axiosInstance
             headers: { Authorization: `Bearer ${token}` }
         });
         fetchLoans(); // Refresh the list after successful deletion
         setSuccessMessage('Loan deleted successfully!');
         setOpenSnackbar(true); // Open Snackbar
       } catch (err) {
-        console.error(`Error deleting loan ${loanId}:`, err);
+        // console.error(`Error deleting loan ${loanId}:`, err); // Keep for debugging if necessary
         setError(err.response?.data?.message || "Failed to delete loan.");
         // Consider showing error in the table error section or a separate Snackbar
       }
@@ -775,7 +767,6 @@ function Loans() {
       <DashboardNavbar />
 
       {/* --- Add Loan Form --- */}
-      {/* Replace CoverLayout with Card */}
       <VuiBox py={3}> {/* Add padding */}
         <Card>
           <VuiBox p={3}> {/* Add padding inside Card */}
@@ -1215,7 +1206,7 @@ function Loans() {
         onClose={handleCloseEditDialog}
         PaperProps={{
             component: 'form',
-            onSubmit: handleUpdateLoan,
+            onSubmit: handleEditLoan,
              sx: {
                 backgroundColor: 'rgba(20, 20, 30, 0.95)',
                 backdropFilter: 'blur(5px)',

@@ -17,18 +17,13 @@ const drawLine = (doc, y, color = '#cccccc', weight = 0.5) => {
 };
 
 // --- Helper Function (Using pdfkit) ---
-// This function now directly pipes the PDF to the response stream
 const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
-    console.log(`[PDF Helper] Generating Client Summary PDF for: ${client.name}`); // Added log
     // Keep bufferPages for potential future multi-page reports
     const doc = new PDFDocument({ margin: 50, bufferPages: true });
     const pageMargin = 50;
     const contentWidth = doc.page.width - pageMargin * 2;
 
     // --- Stream Error Handling ---
-    let errorOccurred = false;
-    let streamClosedPrematurely = false; // Flag for premature close
-    // ... (Keep existing stream error handlers: doc.on('error'), res.on('error'), res.on('close'), doc.on('finish')) ...
     doc.on('error', (err) => {
         console.error('[PDF Helper] PDFDocument stream error (Client Summary):', err);
         errorOccurred = true;
@@ -61,16 +56,11 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
     });
     // --- End Stream Error Handling ---
 
-    // Set headers only if not already sent (handled in main controller function)
-    // if (!res.headersSent) { ... } // This is done in generateClientSummaryReport
-
     // Pipe the PDF document directly to the response stream
-    console.log(`[PDF Helper] Piping PDF document to response (Client Summary ID: ${client.client_id})...`);
     doc.pipe(res);
 
     // --- PDF Content ---
     try {
-        console.log(`[PDF Helper] Adding content to Client Summary PDF (Client ID: ${client.client_id})...`);
 
         // 1. Company Header
         doc.fontSize(20)
@@ -103,7 +93,6 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
         doc.moveDown(2); // Space after client details
 
         // 4. Fetch Summary Data (Robust fetching)
-        console.log(`[PDF Helper] Fetching summary data for Client ID: ${client.client_id}...`);
         let totalRemainingBalance = 0, totalDueActiveLoans = 0, totalPaidInRange = 0;
         try {
             totalRemainingBalance = parseFloat(await Loan.getTotalRemainingBalanceByClient(client.client_id) || 0);
@@ -114,7 +103,6 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
             // Optionally add an error note to the PDF here if needed
             doc.fillColor('red').text('Error: Could not fetch summary financial data.', { align: 'center' }).fillColor('black');
         }
-        console.log(`[PDF Helper] Fetched summary data for Client ID: ${client.client_id}.`);
 
         // 5. Overall Summary Section
         doc.fontSize(14).font('Helvetica-Bold').text('Overall Summary');
@@ -136,7 +124,6 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
         doc.moveDown(2); // Space after summary
 
         // 6. Fetch Loan Details
-        console.log(`[PDF Helper] Fetching loan details for Client ID: ${client.client_id}...`);
         let loans = [];
         try {
             loans = await Loan.findByClientIdWithDetails(client.client_id);
@@ -144,7 +131,6 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
             console.error(`[PDF Helper] Error fetching loan details for Client ${client.client_id}:`, fetchError);
             doc.fillColor('red').text('Error: Could not fetch loan details.', { align: 'center' }).fillColor('black');
         }
-        console.log(`[PDF Helper] Fetched ${loans?.length || 0} loans for Client ID: ${client.client_id}.`);
 
         // 7. Loan Details Section (Enhanced)
         doc.fontSize(14).font('Helvetica-Bold').text('Loan Details');
@@ -227,7 +213,6 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
             doc.font('Helvetica').fontSize(10).text('No loans found for this client.');
             doc.moveDown(1);
         }
-        console.log(`[PDF Helper] Finished adding content sections to Client Summary PDF (Client ID: ${client.client_id}).`);
 
         // --- Footer (Add ONCE at the end, centered) ---
         doc.moveDown(2); // Ensure space before footer
@@ -244,10 +229,7 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
                   width: contentWidth
               }
            );
-        console.log(`[PDF Helper] Added footer.`);
 
-
-        console.log(`[PDF Helper] Calling doc.end() (Client Summary ID: ${client.client_id})...`);
         doc.end();
 
     } catch (dataError) {
@@ -272,7 +254,6 @@ const generateClientSummaryPdf = async (res, client, startDate, endDate) => {
 
 // --- Updated PDF Helper for Net Profit ---
 const generateNetProfitPdf = async (res, startDate, endDate) => {
-    console.log(`[PDF Helper] Generating Net Profit PDF`);
     // bufferPages might not be strictly necessary now, but doesn't hurt
     const doc = new PDFDocument({ margin: 50, bufferPages: true });
     let errorOccurred = false;
@@ -281,7 +262,6 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
 
     // --- Stream Event Handlers (Keep existing handlers) ---
     doc.on('finish', () => {
-        console.log('[PDF Helper] PDFDocument stream finished writing (Net Profit).');
         // res should close automatically after doc finishes piping.
     });
     doc.on('error', (err) => {
@@ -292,7 +272,6 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
             try { res.status(500).json({ message: 'Error generating PDF document stream.' }); } catch (e) { console.error("Error sending JSON error response:", e); }
         } else if (!res.writableEnded) {
             // If headers sent, just try to end the response abruptly
-            console.warn('[PDF Helper] Ending response due to doc stream error after headers sent.');
             res.end();
         }
     });
@@ -301,7 +280,6 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
         errorOccurred = true;
         // If response errors, destroy the source doc stream if it's still active
         if (doc.writable) {
-            console.warn('[PDF Helper] Destroying doc stream due to response stream error.');
             doc.destroy(err); // Pass error to destroy
         }
     });
@@ -312,7 +290,6 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
             streamClosedPrematurely = true;
             // If response closes prematurely, destroy the source doc stream
             if (doc.writable) {
-                console.warn('[PDF Helper] Destroying doc stream due to premature response close.');
                 doc.destroy();
             }
         } else {
@@ -320,20 +297,14 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
         }
     });
 
-    // --- Set Headers ---
-    // Headers are set in the main controller function (generateNetProfitReport) before calling this helper.
-
     // --- Pipe the document to the response ---
-    console.log('[PDF Helper] Piping PDF document to response (Net Profit)...');
     doc.pipe(res);
 
     // --- Add Content and Finalize the PDF Document ---
     try {
-        console.log('[PDF Helper] Adding content to Net Profit PDF...');
 
         // --- Fetch Data ---
         const totalIncome = parseFloat(await PaymentHistory.getTotalPaidInRange(startDate, endDate) || 0);
-        // Placeholder for expenses - replace with actual fetching when implemented
         const totalExpenses = 0.00; // Example
         const netProfit = totalIncome - totalExpenses;
 
@@ -364,8 +335,6 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
                .stroke();
             doc.strokeColor('black'); // Reset stroke color
         };
-
-        // 3. Detailed Breakdown (Income Statement Style)
 
         // Income Section
         doc.fontSize(14).font('Helvetica-Bold').text('Income', { underline: false }); // Larger section header, no underline
@@ -449,17 +418,11 @@ const generateNetProfitPdf = async (res, startDate, endDate) => {
               }
            );
 
-        console.log('[PDF Helper] Finished adding content and footer to Net Profit PDF.');
-
-        // --- Finalize the PDF ---
-        // End the document stream *after* adding all content and the single footer
-        console.log('[PDF Helper] Calling doc.end() (Net Profit)...');
         doc.end();
 
     } catch (contentError) {
         console.error(`[PDF Helper] Error adding content or ending Net Profit PDF: ${contentError}`);
         errorOccurred = true;
-        // ... (keep existing error handling within the catch block) ...
         try {
             if (doc.writable && !res.headersSent) { // Check headersSent as well
                 doc.fontSize(10).fillColor('red').text(`\n\nINTERNAL SERVER ERROR: Failed to generate complete report. Details: ${contentError.message}`);
@@ -483,15 +446,12 @@ exports.generateClientSummaryReport = async (req, res) => {
     const { startDate, endDate } = req.query;
     const action = req.path.includes('/preview') ? 'preview' : 'download';
 
-    console.log(`[Controller] Generating Client Summary Report (${action}) for Client ID: ${clientId}, Dates: ${startDate} to ${endDate}`); // Added log
-
     try {
         if (!clientId || !startDate || !endDate) {
             return res.status(400).json({ message: 'Client ID, start date, and end date are required.' });
         }
         const client = await Client.findById(clientId);
         if (!client) {
-            console.log(`[Controller] Client not found for ID: ${clientId} during report generation`); // Added log
             return res.status(404).json({ message: 'Client not found.' });
         }
 
@@ -505,23 +465,14 @@ exports.generateClientSummaryReport = async (req, res) => {
                  res.setHeader('Content-Disposition', `inline; filename="${filename}"`); // Also set filename for inline
             }
         } else {
-             console.error(`[Controller] Headers already sent before setting Content-Disposition for client ${clientId}`);
              return; // Stop processing if headers are already sent
         }
 
-        // Call the helper function to generate and stream the PDF
-        generateClientSummaryPdf(res, client, startDate, endDate); // Changed from await
-        // No need to call res.send() or res.status() here, as the helper pipes the response
+        generateClientSummaryPdf(res, client, startDate, endDate);
 
     } catch (error) {
-        // Ensure headers are not already sent before sending error response
         if (!res.headersSent) {
-            console.error(`[Controller] Error generating client summary report (${action}) for client ${clientId}:`, error); // Added log
             res.status(500).json({ message: `Server error generating client summary report (${action}).` });
-        } else {
-            console.error(`[Controller] Error after headers sent for client summary report (${action}), client ${clientId}:`, error);
-            // If headers are sent, we can't send a JSON error, but we should log it.
-            // The stream might have already been partially sent or closed.
         }
     }
 };
@@ -530,8 +481,6 @@ exports.generateClientSummaryReport = async (req, res) => {
 exports.generateNetProfitReport = async (req, res) => {
     const { startDate, endDate } = req.query;
     const action = req.path.includes('/preview') ? 'preview' : 'download';
-
-    console.log(`[Controller] Generating Net Profit Report (${action}) for Dates: ${startDate} to ${endDate}`); // Added log
 
     try {
         if (!startDate || !endDate) {
@@ -548,7 +497,6 @@ exports.generateNetProfitReport = async (req, res) => {
                  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
             }
         } else {
-             console.error(`[Controller] Headers already sent before setting Content-Disposition for net profit report`);
              return;
         }
 
@@ -556,13 +504,9 @@ exports.generateNetProfitReport = async (req, res) => {
         await generateNetProfitPdf(res, startDate, endDate); // Added await, although helper manages stream
 
     } catch (error) {
-         // This catch block handles errors from the initial checks (date validation)
-         // or potentially errors thrown synchronously *before* generateNetProfitPdf starts piping.
          if (!res.headersSent) {
-            console.error(`[Controller] Error generating net profit report (${action}):`, error); // Added log
             res.status(500).json({ message: `Server error generating net profit report (${action}).` });
         } else {
-             console.error(`[Controller] Error after headers sent for net profit report (${action}):`, error);
         }
     }
 };

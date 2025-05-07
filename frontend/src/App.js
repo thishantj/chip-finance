@@ -2,17 +2,14 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Route, Switch, Redirect, useLocation, useHistory } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
-import Icon from "@mui/material/Icon";
-import VuiBox from "components/VuiBox";
 import Sidenav from "examples/Sidenav";
-import Configurator from "examples/Configurator";
 import theme from "assets/theme";
 import themeRTL from "assets/theme/theme-rtl";
 import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import routes from "routes";
-import { useVisionUIController, setOpenConfigurator, setLayout } from "context";
+import { useVisionUIController, setLayout } from "context";
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
 import Dashboard from 'layouts/dashboard'; // Example Dashboard component
 import SignIn from 'layouts/authentication/sign-in';
@@ -29,7 +26,7 @@ const handleLogout = (history) => {
 
 export default function App() {
   const [controller, dispatch] = useVisionUIController();
-  const { miniSidenav, direction, layout, openConfigurator, sidenavColor } = controller;
+  const { miniSidenav, direction, layout, sidenavColor } = controller;
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useLocation();
@@ -87,8 +84,6 @@ export default function App() {
     }
   };
 
-  const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
-
   useEffect(() => {
     document.body.setAttribute("dir", direction);
   }, [direction]);
@@ -108,30 +103,6 @@ export default function App() {
       }
       return null;
     });
-
-  const configsButton = (
-    <VuiBox
-      display="flex"
-      justifyContent="center"
-      alignItems="center"
-      width="3.5rem"
-      height="3.5rem"
-      bgColor="info"
-      shadow="sm"
-      borderRadius="50%"
-      position="fixed"
-      right="2rem"
-      bottom="2rem"
-      zIndex={99}
-      color="white"
-      sx={{ cursor: "pointer" }}
-      onClick={handleConfiguratorOpen}
-    >
-      <Icon fontSize="default" color="inherit">
-        settings
-      </Icon>
-    </VuiBox>
-  );
 
   useEffect(() => {
     setLayout(dispatch, pathname.includes("/authentication/") ? "page" : "dashboard");
@@ -156,11 +127,8 @@ export default function App() {
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
           />
-          <Configurator />
-          {configsButton}
         </>
       )}
-      {layout === "vr" && <Configurator />}
       <Switch>
         <Route path="/authentication/sign-in" component={SignIn} />
         <ProtectedRoute path="/dashboard" component={Dashboard} />

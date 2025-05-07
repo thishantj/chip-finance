@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import axiosInstance from "api/axiosInstance"; // Import axiosInstance
 import { getToken } from "utils/auth"; // Updated import path
+import { format, parseISO, isValid } from "date-fns";
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
@@ -25,30 +26,32 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
 // Vision UI Dashboard React base styles
-import colors from "assets/theme/base/colors"; // Import colors
-import borders from "assets/theme/base/borders"; // Import borders
-import typography from "assets/theme/base/typography"; // Import typography
 import { useTheme } from '@mui/material/styles'; // Import useTheme
 
-// Utilities
-// import { formatDate, formatCurrency } from "utils/formatters"; // Assuming you have formatters
-
-// Function to format date
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  const options = { year: "numeric", month: "short", day: "numeric" };
-  return new Date(dateString).toLocaleDateString(undefined, options);
+// Helper function to format currency (LKR)
+const formatCurrency = (amount) => {
+  if (amount === null || amount === undefined || isNaN(Number(amount))) {
+    return "LKR 0.00";
+  }
+  return `LKR ${Number(amount).toLocaleString("en-LK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 };
 
-// Function to format currency
-const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || isNaN(amount)) return "N/A";
-    return parseFloat(amount).toLocaleString("en-LK", {
-        style: "currency",
-        currency: "LKR",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+// Helper function to format date
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  try {
+    const date = parseISO(dateString);
+    if (isValid(date)) {
+      return format(date, "PP"); // e.g., Aug 17, 2023
+    }
+    return "Invalid Date";
+  } catch (error) {
+    // console.error("Error formatting date:", error); // Keep if needed for debugging
+    return "Invalid Date";
+  }
 };
 
 function Installments() {
@@ -74,10 +77,6 @@ function Installments() {
   const { borderRadius } = theme.borders;
   const { size } = theme.typography;
 
-  // --- Helper Functions ---
-  // Remove the local getToken definition
-  // const getToken = () => localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') {
       return;
@@ -96,12 +95,12 @@ function Installments() {
     try {
       const token = getToken();
       if (!token) throw new Error("Authentication token not found.");
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/clients/${clientId}/loan-summary`, {
+      const response = await axiosInstance.get(`/api/clients/${clientId}/loan-summary`, { // Changed to axiosInstance
         headers: { Authorization: `Bearer ${token}` },
       });
       setLoanSummaries(response.data.loanSummaries);
     } catch (err) {
-      console.error("Error fetching loan summary:", err);
+      // console.error("Error fetching loan summary:", err); // Keep for debugging if necessary
       setSummaryError(err.response?.data?.message || err.message || "Failed to fetch loan summary.");
     } finally {
       setIsLoadingSummary(false);
@@ -114,12 +113,12 @@ function Installments() {
     try {
       const token = getToken();
       if (!token) throw new Error("Authentication token not found.");
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/installments/upcoming`, {
+      const response = await axiosInstance.get(`${process.env.REACT_APP_API_BASE_URL}/api/installments/upcoming`, { // Changed to axiosInstance
         headers: { Authorization: `Bearer ${token}` },
       });
       setUpcomingInstallments(response.data);
     } catch (err) {
-      console.error("Error fetching upcoming installments:", err);
+      // console.error("Error fetching upcoming installments:", err); // Keep for debugging if necessary
       setError(err.response?.data?.message || err.message || "Failed to fetch upcoming installments.");
     } finally {
       setIsLoadingUpcoming(false);
@@ -148,12 +147,11 @@ function Installments() {
     try {
       const token = getToken();
       if (!token) throw new Error("Authentication token not found.");
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/clients/search?q=${searchTerm.trim()}`, {
+      const response = await axiosInstance.get(`/api/clients/search?q=${searchTerm.trim()}`, { // Changed to axiosInstance
         headers: { Authorization: `Bearer ${token}` },
       });
       setSearchedClients(response.data);
     } catch (err) {
-      console.error("Error searching clients:", err);
       setSummaryError(err.response?.data?.message || "Failed to search clients."); // Show error in summary area
       setSearchedClients([]);
     } finally {
@@ -170,7 +168,6 @@ function Installments() {
 
   const handlePaymentAmountChange = (installmentId, amount) => {
     setPaymentAmounts(prev => ({ ...prev, [installmentId]: amount }));
-    // Clear error for this specific input on change
     setPaymentErrors(prev => {
         const newErrors = { ...prev };
         delete newErrors[installmentId];
@@ -196,7 +193,7 @@ function Installments() {
       const token = getToken();
       if (!token) throw new Error("Authentication token not found.");
 
-      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/installments/${installmentId}/pay`,
+      await axiosInstance.post(`${process.env.REACT_APP_API_BASE_URL}/api/installments/${installmentId}/pay`, // Changed to axiosInstance
         { paidAmount: parseFloat(amount) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -212,7 +209,6 @@ function Installments() {
       fetchUpcomingInstallments();
 
     } catch (err) {
-      console.error("Error marking installment as paid:", err);
       const errorMessage = err.response?.data?.message || err.message || "Failed to record payment.";
       setPaymentErrors(prev => ({ ...prev, [installmentId]: errorMessage }));
       setSnackbarMessage(errorMessage);
@@ -474,7 +470,6 @@ function Installments() {
                       `${borderWidth[1]} solid ${grey[700]}`,
                   },
                 },
-                 // Optional: Style scrollbar for better visibility in dark mode
                  '&::-webkit-scrollbar': {
                     width: '8px',
                  },
@@ -513,20 +508,3 @@ function Installments() {
 }
 
 export default Installments;
-
-// Helper function (can be moved to utils/formatters.js)
-// const formatDate = (dateString) => {
-//   if (!dateString) return "N/A";
-//   const options = { year: "numeric", month: "short", day: "numeric" };
-//   return new Date(dateString).toLocaleDateString(undefined, options);
-// };
-
-// const formatCurrency = (amount) => {
-//     if (amount === null || amount === undefined || isNaN(amount)) return "N/A";
-//     return parseFloat(amount).toLocaleString("en-LK", {
-//         style: "currency",
-//         currency: "LKR",
-//         minimumFractionDigits: 2,
-//         maximumFractionDigits: 2,
-//     });
-// };

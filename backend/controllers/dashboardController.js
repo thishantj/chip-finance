@@ -16,9 +16,6 @@ const getCurrentWeekBounds = () => {
     const start = startOfWeek(nowInColombo, { timeZone, weekStartsOn: 1 });
     const end = endOfWeek(nowInColombo, { timeZone, weekStartsOn: 1 });
 
-    // Return standard Date objects. The database driver should handle conversion
-    // based on the connection's timezone settings or assume UTC.
-    // These Date objects represent the UTC instants corresponding to the Colombo timezone boundaries.
     return { start, end };
 };
 

@@ -12,10 +12,10 @@ exports.addClient = async (req, res) => {
   }
 
   // Basic validation (can be expanded)
-  if (nic.length < 10) { // Example NIC length validation
+  if (nic.length < 10) {
       return res.status(400).json({ message: 'Invalid NIC format.' });
   }
-  if (telephone.length < 10) { // Example phone length validation
+  if (telephone.length < 10) {
       return res.status(400).json({ message: 'Invalid telephone number format.' });
   }
 
@@ -51,12 +51,7 @@ exports.getClientById = async (req, res) => {
       return res.status(404).json({ message: 'Client not found' });
     }
 
-    // Optionally fetch related loans and installments here too
-    const loans = await Loan.findByClientId(id);
-    // You might want to fetch installments for each loan if needed on this view
-    // const clientData = { ...client, loans };
-
-    res.status(200).json(client); // Send only client data for now, fetch loans separately if needed
+    res.status(200).json(client);
   } catch (error) {
     console.error(`Error getting client ${id}:`, error);
     res.status(500).json({ message: 'Server error fetching client details' });
@@ -224,18 +219,11 @@ exports.getClientSummary = async (req, res) => {
 
         // 3. Construct the summary object
         const summaryData = {
-            // Include basic client info if needed
-            // clientId: client.client_id,
-            // clientName: client.name,
             overallSummary: {
                 total_remaining_balance_all_loans: totalRemainingBalance,
                 total_due_all_active_loans: totalDueActiveLoans,
                 total_paid_in_range_all_loans: totalPaidInRange,
             },
-            // Optionally include detailed lists if needed by the frontend later
-            // activeLoans: [],
-            // completedLoans: [],
-            // paymentsInRange: [],
         };
 
         console.log(`[Controller] Sending summary data for Client ID: ${clientId}`, summaryData); // Added log
@@ -263,11 +251,9 @@ exports.getClientLoanSummary = async (req, res) => {
 
         // 2. For each loan, gather summary details
         const loanSummaries = await Promise.all(loans.map(async (loan) => {
-            const installments = await Installment.findByLoanId(loan.loan_id);
             const paidCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'paid');
             const pendingCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'pending');
-            // const overdueCount = await Installment.countByLoanIdAndStatus(loan.loan_id, 'overdue'); // Add if needed
-
+            
             const nextPendingInstallment = await Installment.findNextPendingInstallment(loan.loan_id);
 
             return {
@@ -282,7 +268,6 @@ exports.getClientLoanSummary = async (req, res) => {
                 next_payment_date: loan.next_payment_date, // Use the stored next payment date
                 next_installment_id: nextPendingInstallment ? nextPendingInstallment.installment_id : null,
                 next_installment_amount: nextPendingInstallment ? nextPendingInstallment.amount_due : null,
-                // Add other relevant loan details if needed
             };
         }));
 

@@ -23,6 +23,7 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import { useTheme } from "@mui/material/styles";
 
 // Vision UI Dashboard React components
 import VuiBox from "components/VuiBox";
@@ -30,7 +31,7 @@ import VuiTypography from "components/VuiTypography";
 import VuiInput from "components/VuiInput";
 import VuiButton from "components/VuiButton";
 import GradientBorder from "examples/GradientBorder";
-import VuiAlert from "components/VuiAlert"; // Import VuiAlert
+import VuiAlert from "components/VuiAlert";
 
 // Vision UI Dashboard React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -63,17 +64,18 @@ function Loans() {
   const [error, setError] = useState("");
   const [addError, setAddError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [loanSearchTerm, setLoanSearchTerm] = useState(""); // For searching within the loans table
-  const [clientSearchTerm, setClientSearchTerm] = useState(""); // For searching clients to add a loan
+  const [loanSearchTerm, setLoanSearchTerm] = useState("");
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientSearchError, setClientSearchError] = useState("");
   const [searchedClients, setSearchedClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [isSearchingClients, setIsSearchingClients] = useState(false);
   const [isLoadingLoans, setIsLoadingLoans] = useState(true);
-  const [openSnackbar, setOpenSnackbar] = useState(false); // State for Snackbar
+  const [openSnackbar, setOpenSnackbar] = useState(false);
 
   // Add Form State
   const [principal, setPrincipal] = useState("");
-  const [loanTermValue, setLoanTermValue] = useState(""); // Value entered by user
+  const [loanTermValue, setLoanTermValue] = useState("");
   const [loanTermUnit, setLoanTermUnit] = useState("Days"); // Unit selected (Days, Weeks, Months)
   const [installmentFrequencyDays, setInstallmentFrequencyDays] = useState("");
   const [interestRate, setInterestRate] = useState("24.8");
@@ -289,36 +291,25 @@ function Loans() {
   const handleClientSearch = async (event) => {
     const searchTerm = event.target.value;
     setClientSearchTerm(searchTerm);
-    setSearchError(""); // Clear previous search error
+    setSelectedClient(null); // Clear previous selection
+    setClientSearchError(""); // Clear previous search error
+    setSearchedClients([]);
 
-    if (searchTerm.length < 2) {
-      setSearchedClients([]);
+    if (searchTerm.trim().length < 2) {
       setIsSearchingClients(false);
-      if (searchTerm.length > 0) {
-        setSearchError("Please enter at least 2 characters to search.");
-      }
       return;
     }
 
     setIsSearchingClients(true);
     try {
       const token = getToken();
-      if (!token) {
-        setSearchError("Authentication error.");
-        setIsSearchingClients(false);
-        return;
-      }
-      // Assuming endpoint /api/clients/search?term=...
-      const response = await axiosInstance.get(`/api/clients/search?term=${searchTerm}`, { // Changed to axiosInstance
+      if (!token) throw new Error("Authentication token not found.");
+      const response = await axiosInstance.get(`/api/clients/search?q=${searchTerm.trim()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSearchedClients(response.data);
-      if (response.data.length === 0) {
-        setSearchError("No clients found matching your search.");
-      }
     } catch (err) {
-      // console.error("Error searching clients:", err); // Keep for debugging if necessary
-      setSearchError(err.response?.data?.message || "Failed to search clients.");
+      setClientSearchError(err.response?.data?.message || "Failed to search clients.");
       setSearchedClients([]);
     } finally {
       setIsSearchingClients(false);
@@ -327,9 +318,9 @@ function Loans() {
 
   const handleSelectClient = (client) => {
     setSelectedClient(client);
-    setClientSearchTerm(client ? `${client.name} (NIC: ${client.nic})` : "");
+    setClientSearchTerm(`${client.name} (${client.nic || "N/A"})`); // Update search term display
     setSearchedClients([]); // Clear search results dropdown
-    setAddError(""); // Clear any previous form errors when client changes
+    setClientSearchError(""); // Clear any search error
   };
 
 
@@ -339,54 +330,24 @@ function Loans() {
     setSuccessMessage("");
 
     if (!selectedClient) {
-      setAddError("Please select a client for the loan.");
+      setAddError("Please search and select a client.");
       return;
     }
 
-    // --- Input Validation ---
-    const principalNum = parseFloat(principal);
-    const termDaysNum = calculatedTermInDays; // Use the calculated term in days
-    const freqNum = parseInt(installmentFrequencyDays, 10);
-    const rateNum = parseFloat(interestRate);
-    const installmentNum = parseFloat(manualInstallmentAmount);
-
-    if (isNaN(principalNum) || principalNum <= 0 ||
-        isNaN(freqNum) || freqNum <= 0 ||
-        isNaN(rateNum) || rateNum < 0 ||
-        isNaN(installmentNum) || installmentNum <= 0) {
-      setAddError("Please enter valid numeric values for loan details.");
+    if (!principal || !interestRate || !loanTermValue || !installmentFrequencyDays) {
+      setAddError("Principal, Interest Rate, Loan Term, and Frequency are required.");
       return;
     }
-    if (termDaysNum < freqNum) {
-        setAddError("Loan term (in days) cannot be less than installment frequency.");
-        return;
-    }
+    // Add other validations as needed
 
-    // Ensure calculation error is cleared before final validation
-    clearCalculationError();
-
-    // Re-check for negative interest based on final values before submitting
-    const finalPrincipal = parseFloat(principal);
-    const finalInstallment = parseFloat(manualInstallmentAmount);
-    const finalTermDays = calculatedTermInDays;
-    const finalFreq = parseInt(installmentFrequencyDays, 10);
-
-    if (!isNaN(finalPrincipal) && finalPrincipal > 0 &&
-        !isNaN(finalInstallment) && finalInstallment > 0 &&
-        finalTermDays > 0 && !isNaN(finalFreq) && finalFreq > 0 && finalTermDays >= finalFreq) {
-        const finalNumInstallments = Math.ceil(finalTermDays / finalFreq);
-        const finalTotalRepayment = finalInstallment * finalNumInstallments;
-        if (finalTotalRepayment < finalPrincipal) {
-             setAddError("Manual installment amount is too low, resulting in negative interest.");
-             return; // Prevent submission
-        }
-    }
-
-    // Validation using calculatedTermInDays
-    if (!principal || termDaysNum <= 0 || !installmentFrequencyDays || !interestRate || !manualInstallmentAmount || parseFloat(interestRate) < 0) { // Added check for negative rate display
-      setAddError("Principal, Term, Frequency, valid Interest Rate, and Installment Amount are required.");
-      return;
-    }
+    const loanData = {
+      client_id: selectedClient.client_id,
+      principal_amount: principal,
+      interest_rate: interestRate,
+      loan_term_days: calculatedTermInDays, // Use calculated term in days
+      installment_frequency_days: installmentFrequencyDays,
+      // The backend will calculate total_amount_due and installment_amount
+    };
 
     try {
       const token = getToken();
@@ -394,42 +355,29 @@ function Loans() {
         setAddError("Authentication token not found.");
         return;
       }
+      const response = await axiosInstance.post("/api/loans", loanData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      const payload = {
-        client_id: selectedClient.client_id,
-        principal_amount: principalNum,
-        interest_rate: rateNum,
-        loan_term_days: termDaysNum, // Send calculated term in days
-        installment_frequency_days: freqNum,
-        installment_amount: installmentNum, // Send the potentially manually adjusted installment amount
-      };
-
-      // API call to add loan
-      const response = await axiosInstance.post( // Changed to axiosInstance
-        `${process.env.REACT_APP_API_BASE_URL}/api/loans`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      // Reset form fields
+      setSuccessMessage(response.data.message || "Loan added successfully!");
+      setOpenSnackbar(true);
+      // Clear form fields
       setPrincipal("");
-      setInterestRate("");
+      setInterestRate("24.8"); // Reset to default or make it empty
       setLoanTermValue("");
-      setLoanTermUnit("Months");
+      setLoanTermUnit("Days");
       setInstallmentFrequencyDays("");
       setManualInstallmentAmount("");
+      setSelectedClient(null); // Clear selected client
+      setClientSearchTerm(""); // Clear client search term
+      // Clear calculated fields
       setCalculatedTotalDue(0);
       setCalculatedInstallmentAmount(0);
       setNumberOfInstallments(0);
-      setCalculatedTermInDays(0); // Reset calculated days
-      setSelectedClient(null); // Clear selected client
-      setClientSearchTerm(""); // Clear client search term
-
-      fetchLoans(); // Refresh the loan list
-      setSuccessMessage(response.data.message || "Loan added successfully!");
-      setOpenSnackbar(true); // Show success Snackbar
+      setCalculatedTermInDays(0);
+      fetchLoans(); // Refresh loan list
     } catch (err) {
-      setAddError(err.response?.data?.message || err.message || "Failed to add loan.");
+      setAddError(err.response?.data?.message || "Failed to add loan.");
     }
   };
 
@@ -811,6 +759,11 @@ function Loans() {
                     sx={({ typography: { size } }) => ({ fontSize: size.sm })}
                   />
                 </GradientBorder>
+                {clientSearchError && !selectedClient && (
+                  <VuiTypography variant="caption" color="error" sx={{ display: 'block', ml: 0.5, mt: 0.5 }}>
+                    {clientSearchError}
+                  </VuiTypography>
+                )}
                 {isSearchingClients && (
                   <CircularProgress size={20} sx={{ position: "absolute", right: 10, top: 40 }} />
                 )}
@@ -880,6 +833,7 @@ function Loans() {
                         onClick={() => {
                           setSelectedClient(null);
                           setClientSearchTerm("");
+                          setClientSearchError(""); // Clear client search error
                           // Optionally clear loan details too
                           setPrincipal("");
                           setLoanTermValue("");

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import axiosInstance from "api/axiosInstance"; // Import axiosInstance
-import { getToken } from "utils/auth"; // Updated import path
+import axiosInstance from "api/axiosInstance";
+import { getToken } from "utils/auth";
 import { format, parseISO, isValid } from "date-fns";
 
 // Vision UI Dashboard React components
@@ -8,7 +8,7 @@ import VuiBox from "components/VuiBox";
 import VuiTypography from "components/VuiTypography";
 import VuiInput from "components/VuiInput";
 import VuiButton from "components/VuiButton";
-import VuiAlert from "components/VuiAlert"; // Import VuiAlert
+import VuiAlert from "components/VuiAlert";
 import GradientBorder from "examples/GradientBorder";
 import Card from "@mui/material/Card";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -16,17 +16,17 @@ import Paper from "@mui/material/Paper";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
-import Grid from "@mui/material/Grid"; // Import Grid
-import Table from "examples/Tables/Table"; // Import Table
-import Snackbar from '@mui/material/Snackbar'; // Import Snackbar
-import Alert from '@mui/material/Alert'; // Import Alert for Snackbar
+import Grid from "@mui/material/Grid";
+import Table from "examples/Tables/Table";
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 
 // Vision UI Dashboard React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
 // Vision UI Dashboard React base styles
-import { useTheme } from '@mui/material/styles'; // Import useTheme
+import { useTheme } from '@mui/material/styles';
 
 // Helper function to format currency (LKR)
 const formatCurrency = (amount) => {

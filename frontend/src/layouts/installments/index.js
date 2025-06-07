@@ -286,7 +286,7 @@ function Installments() {
                   Search Client (Name or NIC)
                 </VuiTypography>
               </VuiBox>
-              <GradientBorder /* ... gradient props ... */ >
+              <GradientBorder>
                 <VuiInput
                   type="text"
                   placeholder="Start typing to search..."
@@ -311,7 +311,7 @@ function Installments() {
                     {searchedClients.map((client) => (
                       <ListItem button key={client.client_id} onClick={() => handleSelectClient(client)} sx={{ "&:hover": { backgroundColor: info.main } }}>
                         <ListItemText
-                          primaryTypographyProps={{ color: "white", fontSize: size.sm }}
+                          primaryTypographyProps={{ color: grey[700], fontSize: size.sm }}
                           secondaryTypographyProps={{ color: grey[500], fontSize: size.xs }}
                           primary={client.name}
                           secondary={`NIC: ${client.nic || 'N/A'} / Tel: ${client.telephone || 'N/A'}`}
@@ -328,7 +328,7 @@ function Installments() {
               <VuiBox mt={3}>
                 <VuiBox display="flex" justifyContent="space-between" alignItems="center" mb={2} p={1.5} sx={{ border: `1px solid ${grey[700]}`, borderRadius: borderRadius.md, backgroundColor: background.default }}>
                    <VuiBox>
-                     <VuiTypography variant="h6" color="white" fontWeight="medium">
+                     <VuiTypography variant="h6" color="${grey[500]}" fontWeight="medium">
                        Selected: {selectedClient.name}
                      </VuiTypography>
                      <VuiTypography variant="caption" color="text" ml={1}>
